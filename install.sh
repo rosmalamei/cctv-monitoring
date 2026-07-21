@@ -401,7 +401,7 @@ install_mediamtx() {
 
     local MEDIAMTX_VERSION="1.16.1"
     local MEDIAMTX_FILE="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
-    local MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases/download/v${MEDIAMTX_VERSION}/${MEDIAMTX_FILE}"
+    local MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases?page=2/download/v${MEDIAMTX_VERSION}/${MEDIAMTX_FILE}"
 
     log_info "Downloading MediaMTX v${MEDIAMTX_VERSION} for ${ARCH_LABEL}..."
     
