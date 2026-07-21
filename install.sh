@@ -399,7 +399,7 @@ install_mediamtx() {
         return 0
     fi
 
-    local MEDIAMTX_VERSION="1.16.2"
+    local MEDIAMTX_VERSION="1.19.2"
     local MEDIAMTX_FILE="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
     local MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases/download/v${MEDIAMTX_VERSION}/${MEDIAMTX_FILE}"
 
