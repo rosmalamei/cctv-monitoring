@@ -393,33 +393,33 @@ install_nodejs() {
 # ──────────────────────────────────────────────────────────────
 # Install MediaMTX
 # ──────────────────────────────────────────────────────────────
-#install_mediamtx() {
-#    if [ -f "mediamtx" ] && [ -x "mediamtx" ]; then
-#        log_ok "MediaMTX binary already exists"
-#        return 0
-#    fi
+install_mediamtx() {
+    if [ -f "mediamtx" ] && [ -x "mediamtx" ]; then
+        log_ok "MediaMTX binary already exists"
+        return 0
+    fi
 
-#    local MEDIAMTX_VERSION="1.16.2"
-#    local MEDIAMTX_FILE="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
-#    local MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases/download/v${MEDIAMTX_VERSION}/${MEDIAMTX_FILE}"
+    local MEDIAMTX_VERSION="1.17.1"
+    local MEDIAMTX_FILE="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
+    local MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases/download/v${MEDIAMTX_VERSION}/${MEDIAMTX_FILE}"
 
-#    log_info "Downloading MediaMTX v${MEDIAMTX_VERSION} for ${ARCH_LABEL}..."
+    log_info "Downloading MediaMTX v${MEDIAMTX_VERSION} for ${ARCH_LABEL}..."
     
-#    if command -v wget &>/dev/null; then
-#        wget -q --show-progress -O mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
-#            log_error "Failed to download MediaMTX"
-#            log_info "Try downloading manually from: $MEDIAMTX_URL"
-#            exit 1
-#        }
-#    elif command -v curl &>/dev/null; then
-#        curl -L --progress-bar -o mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
-#            log_error "Failed to download MediaMTX"
-#            log_info "Try downloading manually from: $MEDIAMTX_URL"
-#            exit 1
-#        }
-#    else
-#        log_error "Neither curl nor wget found"
-#        exit 1
+    if command -v wget &>/dev/null; then
+        wget -q --show-progress -O mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
+            log_error "Failed to download MediaMTX"
+            log_info "Try downloading manually from: $MEDIAMTX_URL"
+            exit 1
+        }
+    elif command -v curl &>/dev/null; then
+        curl -L --progress-bar -o mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
+            log_error "Failed to download MediaMTX"
+            log_info "Try downloading manually from: $MEDIAMTX_URL"
+            exit 1
+        }
+    else
+        log_error "Neither curl nor wget found"
+        exit 1
     fi
 
     tar -xzf mediamtx.tar.gz mediamtx mediamtx.yml 2>/dev/null || {
