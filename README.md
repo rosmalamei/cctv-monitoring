@@ -13,7 +13,7 @@
 
 ```bash
 # Copy-paste 3 command ini:
-git clone https://github.com/alijayanet/cctv-monitoring.git
+git clone https://github.com/rosmalamei/cctv-monitoring.git
 cd cctv-monitoring
 sudo bash install.sh
 ```
