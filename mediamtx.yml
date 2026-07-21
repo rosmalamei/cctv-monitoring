@@ -1,0 +1,24 @@
+paths:
+  all:
+    source: publisher
+
+record: yes
+recordPath: ./recordings/%path/%d-%m-%Y_%H-%M-%S
+recordFormat: fmp4
+recordSegmentDuration: 60m
+recordDeleteAfter: 720h
+
+rtspAddress: :8555
+rtpAddress: :8050
+rtcpAddress: :8051
+
+rtmpAddress: :1936
+
+hlsAddress: :8856
+hlsVariant: fmp4
+
+webrtcAddress: :8890
+webrtcLocalUDPAddress: :8190
+
+api: yes
+apiAddress: :9123

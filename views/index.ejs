@@ -1,0 +1,2385 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="<%= base_path %>/manifest.json">
+    <link rel="icon" href="<%= base_path %>/icon-192x192.png">
+    <link rel="apple-touch-icon" href="<%= base_path %>/icon-192x192.png">
+    <title><%= site.title %> - Live Dashboard</title>
+    
+    <!-- Fonts & CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'marquee': 'marquee 30s linear infinite',
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                    },
+                    keyframes: {
+                        marquee: { '0%': { transform: 'translateX(100%)' }, '100%': { transform: 'translateX(-100%)' } },
+                        fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="<%= base_path %>/css/modern.css">
+    <link rel="stylesheet" href="<%= base_path %>/css/leaflet.css" />
+    
+    <style>
+        /* Theme Variables */
+        :root {
+            --bg-primary: #020617;
+            --bg-secondary: #0f172a;
+            --bg-tertiary: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-tertiary: #64748b;
+            --border-color: rgba(255,255,255,0.05);
+            --glass-bg: rgba(15, 23, 42, 0.6);
+            --nav-bg: rgba(15, 23, 42, 0.9);
+            --sidebar-bg: #0f172a;
+            --video-border: #1e293b;
+            --empty-slot-text: #1e293b;
+            --scrollbar-thumb: #334155;
+        }
+        
+        [data-theme="light"] {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-tertiary: #64748b;
+            --border-color: rgba(0,0,0,0.1);
+            --glass-bg: rgba(255, 255, 255, 0.8);
+            --nav-bg: rgba(255, 255, 255, 0.95);
+            --sidebar-bg: #ffffff;
+            --video-border: #cbd5e1;
+            --empty-slot-text: #cbd5e1;
+            --scrollbar-thumb: #cbd5e1;
+        }
+        
+        * { transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
+        
+        body { 
+            background-color: var(--bg-primary); 
+            color: var(--text-primary); 
+            font-family: 'Inter', sans-serif; 
+        }
+        .glass-panel { 
+            background: var(--glass-bg); 
+            backdrop-filter: blur(12px); 
+            border: 1px solid var(--border-color); 
+        }
+        .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+        .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-scroll::-webkit-scrollbar-thumb { 
+            background: var(--scrollbar-thumb); 
+            border-radius: 10px; 
+        }
+        
+        #live-display { height: 100%; display: flex; flex-direction: column; gap: 0.75rem; overflow: hidden; }
+        .live-grid { display: grid; gap: 1rem; width: 100%; flex: 1; min-height: 0; transition: all 0.3s ease; }
+        .grid-1 { grid-template-columns: 1fr; width: 100%; margin: 0 auto; }
+        .grid-2 { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; width: 100%; }
+        .grid-4 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+        .grid-6 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
+        .grid-9 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+        .grid-12 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr); }
+        .grid-16 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); }
+        
+        @media (min-width: 1024px) {
+            .grid-1 { max-width: 100%; height: auto; aspect-ratio: 16/9; }
+        }
+
+        .video-wrapper { position: relative; width: 100%; height: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 0; overflow: hidden; border: 1px solid var(--video-border); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); }
+        .video-wrapper video { width: 100%; height: 100%; object-fit: cover; }
+        @media (min-width: 1024px) {
+            .video-wrapper video { object-fit: contain; }
+        }
+        
+        .empty-slot { aspect-ratio: 16 / 9; background: #000; display: flex; align-items: center; justify-content: center; color: var(--empty-slot-text); border-radius: 0.75rem; border: 1px dashed var(--empty-slot-text); }
+        .camera-item.selected { border-color: #10b981; background: rgba(16, 185, 129, 0.05); }
+        
+        .nav-tab { transition: all 0.2s ease; cursor: pointer; }
+        .nav-tab:hover { background: rgba(255,255,255,0.05); }
+        .nav-tab.active { background: #10b981; color: #020617; }
+        .custom-div-icon { background: none !important; border: none !important; }
+        .blink { animation: blink 1s steps(5, start) infinite; }
+        @keyframes blink { to { visibility: hidden; } }
+        
+        /* Theme Toggle Button */
+        .theme-toggle {
+            position: relative;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .theme-toggle:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        }
+        .theme-toggle svg {
+            width: 18px;
+            height: 18px;
+            color: var(--text-primary);
+        }
+        
+        /* Theme-aware utility classes */
+        .bg-primary { background-color: var(--bg-primary) !important; }
+        .bg-secondary { background-color: var(--bg-secondary) !important; }
+        .bg-tertiary { background-color: var(--bg-tertiary) !important; }
+        .text-primary { color: var(--text-primary) !important; }
+        .text-secondary { color: var(--text-secondary) !important; }
+        .border-themed { border-color: var(--border-color) !important; }
+        
+        /* Override Tailwind for theme support */
+        nav, aside, .glass-panel { background: var(--nav-bg) !important; }
+        aside { background: var(--sidebar-bg) !important; }
+        main { background: var(--bg-primary) !important; }
+        
+        [data-theme="light"] .bg-slate-900,
+        [data-theme="light"] .bg-slate-900\/90,
+        [data-theme="light"] .bg-slate-900\/95,
+        [data-theme="light"] .bg-slate-900\/50 {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+        }
+        
+        [data-theme="light"] .bg-slate-950,
+        [data-theme="light"] .bg-slate-950\/50,
+        [data-theme="light"] .bg-slate-950\/80 {
+            background-color: rgba(248, 250, 252, 0.95) !important;
+        }
+        
+        [data-theme="light"] .text-white,
+        [data-theme="light"] .text-slate-200,
+        [data-theme="light"] .text-slate-300 {
+            color: #0f172a !important;
+        }
+        
+        [data-theme="light"] .text-slate-400,
+        [data-theme="light"] .text-slate-500 {
+            color: #64748b !important;
+        }
+        
+        [data-theme="light"] .text-slate-600,
+        [data-theme="light"] .text-slate-700 {
+            color: #475569 !important;
+        }
+        
+        [data-theme="light"] .border-slate-700,
+        [data-theme="light"] .border-slate-800 {
+            border-color: #e2e8f0 !important;
+        }
+        
+        [data-theme="light"] .shadow-2xl {
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15) !important;
+        }
+        
+        /* ===== LOADING STATES & ANIMATIONS ===== */
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(16, 185, 129, 0.2);
+            border-top: 3px solid #10b981;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .pulse-dot {
+            animation: pulse-dot 2s infinite;
+        }
+        
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+        
+        /* Smooth hover effects */
+        .hover-lift {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .hover-lift:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Video loading overlay */
+        .video-loading {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            z-index: 10;
+        }
+        
+        /* Notification animations */
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        
+        .notification-enter {
+            animation: slideInRight 0.3s ease-out;
+        }
+        
+        .notification-exit {
+            animation: slideOutRight 0.3s ease-in;
+        }
+        
+        /* Button press effect */
+        .btn-press {
+            transition: transform 0.1s ease;
+        }
+        
+        .btn-press:active {
+            transform: scale(0.95);
+        }
+        
+        /* Sidebar collapse - simple reliable approach */
+        #desktopSidebar.sidebar-closed {
+            width: 0px !important;
+            min-width: 0px !important;
+            flex: 0 0 0px !important;
+            overflow: hidden !important;
+            padding: 0 !important;
+            border-left: none !important;
+            opacity: 0;
+            margin-left: -420px;
+        }
+        #main-content-display.sidebar-closed {
+            width: 100%;
+        }
+        #sidebarToggle.toggle-visible {
+            display: flex !important;
+        }
+        #sidebarToggle.toggle-hidden {
+            display: none !important;
+        }
+        
+        /* Skeleton loading for camera items */
+        .skeleton {
+            background: linear-gradient(90deg, 
+                var(--bg-tertiary) 25%, 
+                rgba(255,255,255,0.05) 50%, 
+                var(--bg-tertiary) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+        }
+        
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+    
+    <script src="<%= base_path %>/js/hls.min.js"></script>
+    <script src="<%= base_path %>/js/leaflet.js"></script>
+</head>
+<body class="antialiased h-screen flex flex-col overflow-hidden">
+    <%- include('partials/global_modal') %>
+
+    <!-- Time Modal (Mobile) -->
+    <div id="timeModal" onclick="closeTimeModal()" class="fixed inset-0 z-[110] hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+        <div onclick="event.stopPropagation()" class="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-3xl shadow-2xl overflow-hidden p-8 flex flex-col items-center gap-6">
+            <div class="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center">
+                <svg class="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <div class="text-center">
+                <h2 id="modal-clock" class="text-4xl font-black text-white tracking-tighter mb-1">00:00:00</h2>
+                <p id="modal-date" class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">01 Januari 2026</p>
+            </div>
+            <div class="w-full h-px bg-slate-800"></div>
+            <div class="flex items-center gap-3">
+                <div class="w-2 h-2 bg-emerald-500 rounded-full blink"></div>
+                <span class="text-[10px] font-black text-slate-300 uppercase tracking-widest">Server Live Status</span>
+            </div>
+            <button onclick="closeTimeModal()" class="mt-4 w-full py-3 bg-slate-800 text-white text-[10px] font-black rounded-xl uppercase tracking-widest hover:bg-slate-700 transition">Tutup</button>
+        </div>
+    </div>
+
+    <!-- Header Navigation -->
+    <nav class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 flex-none h-14 lg:h-16 flex items-center z-50">
+        <div class="w-full px-6 flex justify-between items-center gap-4">
+            <!-- Brand -->
+            <div class="flex items-center gap-4 flex-none cursor-pointer" onclick="window.location.href='<%= base_path %>/'">
+                <div class="p-2 bg-emerald-500/20 rounded-lg hidden sm:block">
+                    <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-sm font-black text-white tracking-tight uppercase leading-none"><%= site.title %></h1>
+                    <p class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1"><%= site.footer %></p>
+                </div>
+            </div>
+
+            <!-- Central Area (Desktop Only) -->
+            <div class="hidden lg:flex flex-1 items-center justify-center gap-4">
+                <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button onclick="switchMode('live')" id="tab-live" class="nav-tab active px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all">Live</button>
+                    <button onclick="switchMode('map')" id="tab-map" class="nav-tab px-4 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-widest transition-all">Peta</button>
+                </div>
+                
+                <!-- Grid Layout Presets -->
+                <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 gap-1">
+                    <button onclick="setGridPreset(1)" class="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-white transition-all" title="1x1 Grid">1×1</button>
+                    <button onclick="setGridPreset(4)" class="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-white transition-all" title="2x2 Grid">2×2</button>
+                    <button onclick="setGridPreset(9)" class="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-white transition-all" title="3x3 Grid">3×3</button>
+                    <button onclick="setGridPreset(16)" class="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-white transition-all" title="4x4 Grid">4×4</button>
+                </div>
+            </div>
+
+            <!-- User/Weather -->
+            <div class="flex items-center gap-2 lg:gap-3 flex-none">
+                <!-- Desktop Clock & Status -->
+                <div class="hidden lg:flex items-center gap-4 px-4 py-1.5 bg-slate-950/50 rounded-xl border border-slate-800/50 mr-2">
+                    <div class="flex items-center gap-3">
+                        <span id="topbar-clock" class="text-sm font-black text-white leading-none tracking-tighter">00:00:00</span>
+                        <div class="w-px h-3 bg-slate-800"></div>
+                        <span id="topbar-date" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">01 Januari 2026</span>
+                    </div>
+                    <div class="h-6 w-px bg-slate-800"></div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 bg-emerald-500 rounded-full blink"></div>
+                        <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">Server Live</span>
+                    </div>
+                </div>
+
+                <!-- Mobile Date Button -->
+                <button onclick="showTimeModal()" class="lg:hidden flex items-center justify-center w-9 h-9 bg-slate-800 text-white rounded-xl border border-slate-700 shadow-lg active:scale-95 transition">
+                    <span id="mobile-date-num" class="text-sm font-black"><%= new Date().getDate() %></span>
+                </button>
+
+                <div id="weather-widget" onclick="showWeatherDetail()" class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 hover:bg-slate-700/50 cursor-pointer rounded-xl border border-slate-700/50 transition duration-300">
+                    <span id="weather-icon" class="text-sm">🌤️</span>
+                    <span id="weather-temp" class="text-xs font-bold text-slate-200">--°C</span>
+                </div>
+                
+                <!-- Theme Toggle Button -->
+                <button onclick="cycleTheme()" class="theme-toggle" title="Ganti Tema" id="theme-toggle-btn">
+                    <svg id="theme-icon-dark" class="hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                    </svg>
+                    <svg id="theme-icon-light" class="hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                    <svg id="theme-icon-auto" class="hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                    </svg>
+                </button>
+                
+                <div class="hidden lg:flex items-center gap-1">
+                    <a href="<%= base_path %>/archive" class="px-3 py-2 text-[10px] font-bold text-slate-400 hover:text-white uppercase tracking-widest transition">REKAMAN</a>
+                    <% if (typeof isAdmin !== 'undefined' && isAdmin) { %>
+                        <a href="<%= base_path %>/admin" class="px-3 py-2 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 uppercase tracking-widest transition">Admin</a>
+                        <a href="<%= base_path %>/user/logout" class="ml-1 px-3 py-1.5 bg-rose-500/10 text-rose-500 text-[10px] font-black rounded-lg hover:bg-rose-500 hover:text-white transition uppercase tracking-widest">Logout</a>
+                    <% } else if (typeof isCustomer !== 'undefined' && isCustomer) { %>
+                        <span onclick="window.location.href='<%= base_path %>/user/account'" class="hidden md:block text-[10px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer uppercase tracking-widest mx-2"><%= (customer.full_name || customer.username).toUpperCase() %></span>
+                        <a href="<%= base_path %>/user/logout" class="px-3 py-1.5 bg-rose-500/10 text-rose-500 text-[10px] font-black rounded-lg hover:bg-rose-500 hover:text-white transition uppercase tracking-widest">Logout</a>
+                    <% } else { %>
+                        <a href="<%= base_path %>/user/login" class="ml-2 px-4 py-2 bg-emerald-600 text-white text-[10px] font-black rounded-xl hover:bg-emerald-500 transition shadow-lg shadow-emerald-500/20 uppercase tracking-widest">Login</a>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Mobile Bottom Navigation -->
+    <div class="lg:hidden fixed bottom-0 left-0 right-0 h-14 bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 flex items-center justify-around px-2 z-[100] shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.5)]">
+        <button onclick="switchMode('live')" id="m-tab-live" class="flex flex-col items-center gap-1 px-3 group">
+            <div class="p-1.5 rounded-xl bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all duration-300" id="m-icon-live">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            </div>
+            <span class="text-[8px] font-black text-emerald-500 uppercase tracking-widest" id="m-text-live">Live</span>
+        </button>
+        
+        <button onclick="switchMode('map')" id="m-tab-map" class="flex flex-col items-center gap-1 px-3 group">
+            <div class="p-1.5 rounded-xl text-slate-500 transition-all duration-300" id="m-icon-map">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m6 13l5.447-2.724A1 1 0 0121 18.382V7.618a1 1 0 01-1.447-.894L15 9m-6 11V7m6 11V9"></path></svg>
+            </div>
+            <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest" id="m-text-map">Peta</span>
+        </button>
+
+        <% if (typeof isCustomer !== 'undefined' && isCustomer || typeof isAdmin !== 'undefined' && isAdmin) { %>
+            <a href="<%= base_path %>/archive" class="flex flex-col items-center gap-1 px-3 group">
+                <div class="p-1.5 rounded-xl text-slate-500">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest">Rekaman</span>
+            </a>
+
+            <button onclick="window.location.href='<%= base_path %>/user/account'" class="flex flex-col items-center gap-1 px-3 group">
+                <div class="p-1.5 rounded-xl text-slate-500 transition-all duration-300" id="m-icon-account">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                </div>
+                <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest" id="m-text-account">Akun</span>
+            </button>
+
+            <button onclick="openReportModal()" class="flex flex-col items-center gap-1 px-3 group text-amber-500">
+                <div class="p-1.5 rounded-xl text-amber-500/50 group-hover:text-amber-500 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <span class="text-[8px] font-black uppercase tracking-widest">Lapor</span>
+            </button>
+        <% } else { %>
+            <a href="<%= base_path %>/user/login" class="flex flex-col items-center gap-1 px-3 group text-emerald-500">
+                <div class="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 transition-all duration-300">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                </div>
+                <span class="text-[8px] font-black uppercase tracking-widest">Login</span>
+            </a>
+        <% } %>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        <main class="flex-1 flex flex-col overflow-hidden bg-slate-950 relative">
+            <div id="main-content-display" class="flex-none lg:flex-1 overflow-hidden relative flex flex-col items-center justify-center p-0 lg:p-4 bg-black">
+                <div id="live-display" class="w-full flex flex-col gap-3">
+                    <div id="live-grid" class="live-grid grid-1 flex-1 min-h-0">
+                        <div class="empty-slot animate-fade-in flex-col gap-4">
+                            <svg class="w-12 h-12 text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            <p class="text-xs font-black uppercase tracking-widest text-slate-800">Pilih Kamera</p>
+                        </div>
+                    </div>
+                    <% if (site.running_text) { %>
+                    <div class="w-full bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden flex items-center shadow-lg backdrop-blur-sm">
+                        <div class="bg-emerald-600 text-slate-950 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest z-10 flex-none shadow-[10px_0_20px_-5px_rgba(0,0,0,0.5)] flex items-center gap-2">
+                            <div class="w-1.5 h-1.5 bg-slate-950 rounded-full animate-pulse"></div>
+                            INFO
+                        </div>
+                        <div class="flex-1 overflow-hidden relative flex items-center h-full">
+                            <div class="animate-marquee whitespace-nowrap px-4 py-2">
+                                <p class="text-xs font-bold text-slate-300 inline-block">
+                                    <%= site.running_text %>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <% } %>
+                </div>
+                <div id="map-display" class="hidden w-full h-full animate-fade-in absolute inset-0 p-0 lg:p-4">
+                    <div id="map" class="w-full h-full lg:rounded-2xl border-b lg:border border-slate-800 overflow-hidden"></div>
+                </div>
+            </div>
+
+            <!-- Mobile List (Hidden on desktop) -->
+            <div id="mobile-list-container" class="lg:hidden flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/50 border-t border-slate-800 pb-24 sidebar-scroll">
+                <div class="relative">
+                    <input type="text" id="mobile-search" placeholder="Cari Kamera..." 
+                        class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none pl-10 uppercase font-bold">
+                    <svg class="w-4 h-4 text-slate-600 absolute left-3.5 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <div id="mobile-camera-list" class="space-y-2 pb-24">
+                    <!-- Cloned from JS -->
+                </div>
+                <!-- Mobile Status Footer -->
+                <div class="mt-4 p-3 rounded-xl bg-slate-950/50 border border-slate-800/50">
+                    <div class="flex items-center justify-between text-[9px] text-slate-600">
+                        <span class="flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <span id="mobileOnlineCount">0</span> Online
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                            <span id="mobileOfflineCount">0</span> Offline
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Sidebar Toggle Button (Desktop Only) -->
+        <button id="sidebarToggle" onclick="toggleSidebar()" class="hidden fixed right-0 top-1/2 -translate-y-1/2 z-50 w-8 h-16 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 border-r-0 rounded-l-xl items-center justify-center transition-all duration-300 shadow-xl backdrop-blur-sm group" title="Buka Sidebar">
+            <svg id="sidebarArrow" class="w-4 h-4 text-slate-400 group-hover:text-white transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14m7-7l-7 7-7-7"></path>
+            </svg>
+        </button>
+
+        <!-- Sidebar Section (Desktop Only) - Collapsible -->
+        <aside id="desktopSidebar" class="hidden lg:flex w-[420px] bg-slate-900/95 backdrop-blur-xl border-l border-slate-800 flex-col flex-none shadow-2xl z-40 transition-all duration-500 ease-in-out sidebar-expanded">
+            <div class="flex items-center justify-between p-4 border-b border-slate-800">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                    Daftar Kamera
+                </h3>
+                <div class="flex items-center gap-2">
+                    <span id="cameraCount" class="text-[9px] font-bold text-slate-600 bg-slate-800 px-2 py-1 rounded-full"><%= cameras.length %></span>
+                    <button onclick="toggleSidebar()" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white transition group" title="Tutup Sidebar">
+                        <svg class="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4 border-b border-slate-800">
+                <div class="relative">
+                    <input type="text" id="camera-search" placeholder="Cari kamera..." class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 pl-10 transition-all placeholder:text-slate-600">
+                    <svg class="w-3.5 h-3.5 text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+            <div id="camera-list" class="flex-1 overflow-y-auto sidebar-scroll p-3 space-y-2">
+                <% cameras.forEach(camera => { %>
+                <div class="camera-item glass-panel p-2.5 rounded-xl border border-slate-800/80 hover:border-emerald-500/30 hover:bg-slate-800/40 transition-all duration-200 group cursor-pointer" 
+                    data-id="<%= camera.id %>" data-nama="<%= camera.nama.toLowerCase() %>" onclick="toggleCameraSelection('<%= camera.id %>')">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 bg-slate-950 rounded-lg flex items-center justify-center border border-slate-800 overflow-hidden relative shrink-0">
+                            <svg class="w-4 h-4 text-slate-700 group-hover:text-emerald-500 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            <!-- Status Badge -->
+                            <div class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-slate-950 camera-status-badge" data-camera-id="<%= camera.id %>" title="Checking...">
+                                <div class="w-full h-full rounded-full bg-slate-600 animate-pulse"></div>
+                            </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-1.5">
+                                <h4 class="text-[11px] font-bold text-slate-200 truncate group-hover:text-white transition"><%= camera.nama %></h4>
+                                <% if (!camera.isPlayable) { %>
+                                    <svg class="w-2.5 h-2.5 text-rose-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
+                                <% } %>
+                            </div>
+                            <p class="text-[8px] text-sky-400/80 font-bold uppercase truncate tracking-wide"><%= camera.lokasi || 'Live' %></p>
+                            <div class="flex items-center gap-2 mt-0.5">
+                                <span class="text-[7px] font-bold <%= camera.isPlayable ? 'text-emerald-500/80' : 'text-rose-500/80' %> uppercase tracking-widest">
+                                    <%= (camera.level || 'umum').toUpperCase() %>
+                                </span>
+                                <span class="text-[7px] font-bold text-slate-600 uppercase tracking-widest camera-status-text" data-camera-id="<%= camera.id %>">
+                                    • Checking...
+                                </span>
+                            </div>
+                        </div>
+                        <div class="status-indicator hidden w-2 h-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50 shrink-0"></div>
+                    </div>
+                </div>
+                <% }) %>
+            </div>
+            <!-- Sidebar Footer -->
+            <div class="p-3 border-t border-slate-800/50 bg-slate-900/50">
+                <div class="flex items-center justify-between text-[9px] text-slate-600">
+                    <span class="flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span id="sidebarOnlineCount">0</span> Online
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                        <span id="sidebarOfflineCount">0</span> Offline
+                    </span>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Weather Modal -->
+    <div id="weatherModal" onclick="closeWeatherModalOnBackdrop(event)" class="fixed inset-0 z-[100] hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onclick="event.stopPropagation()">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900 sticky top-0 z-10">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-emerald-500/20 rounded-xl"><svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg></div>
+                    <div><h3 class="text-sm font-bold text-white uppercase tracking-widest">Detail Cuaca</h3></div>
+                </div>
+                <button onclick="closeWeatherModal()" class="p-2 hover:bg-slate-800 rounded-xl text-slate-500 hover:text-white transition"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+            <div class="flex-1 overflow-y-auto sidebar-scroll p-8 space-y-8">
+                <div id="modal-weather-content" class="flex flex-col gap-6"></div>
+            </div>
+            
+            <!-- Tombol Kembali -->
+            <div class="p-6 border-t border-slate-800 bg-slate-900 sticky bottom-0 z-10">
+                <button onclick="closeWeatherModal()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    TUTUP
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Incident Report Modal -->
+    <div id="reportModal" class="fixed inset-0 z-[110] hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-amber-500/20 rounded-xl"><svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>
+                    <h3 class="text-sm font-black text-white uppercase tracking-widest">Buat Laporan Kejadian</h3>
+                </div>
+                <button onclick="closeReportModal()" class="p-2 hover:bg-slate-800 rounded-xl text-slate-500 transition"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+            <form id="reportForm" class="p-8 space-y-6">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest">Pilih Kamera</label>
+                    <select name="camera_id" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-xs focus:border-emerald-500 transition-all">
+                        <option value="">-- Pilih Lokasi --</option>
+                        <% cameras.forEach(cam => { %>
+                            <option value="<%= cam.id %>"><%= cam.nama %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest">Kategori Laporan</label>
+                    <select name="category" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-xs focus:border-emerald-500 transition-all">
+                        <option value="Kriminalitas">Kriminalitas / Pencurian</option>
+                        <option value="Lalu Lintas">Kecelakaan Lalu Lintas</option>
+                        <option value="Kebakaran">Kebakaran</option>
+                        <option value="Bencana Alam">Bencana Alam</option>
+                        <option value="Sampah">Tumpukan Sampah</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest">Deskripsi Kejadian</label>
+                    <textarea name="description" required rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-xs focus:border-emerald-500 transition-all" placeholder="Jelaskan detail kejadian..."></textarea>
+                </div>
+                <button type="submit" class="w-full py-4 bg-emerald-600 text-white text-xs font-black uppercase rounded-2xl shadow-xl shadow-emerald-500/20 hover:bg-emerald-500 transition tracking-widest">Kirim Laporan</button>
+            </form>
+        </div>
+    </div>
+
+    <script id="cameras-data" type="application/json"><%- JSON.stringify(cameras) %></script>
+    <script>
+        const cameras = JSON.parse(document.getElementById('cameras-data').textContent);
+        const basePath = '<%= base_path %>';
+        const hlsPort = '<%= (typeof mediamtx !== "undefined" ? mediamtx.hls_port : "8856") %>';
+        const hlsBase = '<%= hlsBaseUrl %>';
+        const userStatus = JSON.parse('<%- typeof userStatus !== "undefined" ? userStatus : JSON.stringify({isAdmin:false,isCustomer:false}) %>');
+        
+        let selectedCameraIds = [];
+        let viewMode = 'live';
+        let hlsInstances = {};
+        let map = null;
+
+        // --- Embed Camera Helper ---
+        function generateEmbedHtml(camera) {
+            if (!camera.embed_url) return '<div class="text-red-500">No embed URL</div>';
+            
+            const embedType = camera.embed_type || detectEmbedType(camera.embed_url);
+            
+            if (embedType === 'youtube') {
+                let videoId = '';
+                const url = camera.embed_url;
+                if (url.includes('youtube.com/watch?v=')) {
+                    videoId = url.split('v=')[1]?.split('&')[0];
+                } else if (url.includes('youtube.com/embed/')) {
+                    videoId = url.split('embed/')[1]?.split('?')[0];
+                } else if (url.includes('youtu.be/')) {
+                    videoId = url.split('youtu.be/')[1]?.split('?')[0];
+                }
+                if (videoId) {
+                    return `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full"></iframe>`;
+                }
+                return `<iframe src="${camera.embed_url}" frameborder="0" allowfullscreen class="w-full h-full"></iframe>`;
+            } else if (embedType === 'hls') {
+                // Return only video element, script init will be called separately
+                return `<video id="embed-hls-${camera.id}" class="w-full h-full" controls autoplay muted></video>`;
+            }
+            
+            // Default iframe
+            return `<iframe src="${camera.embed_url}" frameborder="0" allowfullscreen class="w-full h-full"></iframe>`;
+        }
+        
+        function initEmbedHls(cameraId, embedUrl) {
+            const video = document.getElementById(`embed-hls-${cameraId}`);
+            if (!video) return;
+            
+            if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+                hls.loadSource(embedUrl);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    video.play().catch(e => console.log('Autoplay prevented:', e));
+                });
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    console.error('HLS error:', data);
+                });
+                // Store reference for cleanup
+                if (!window.hlsInstances) window.hlsInstances = {};
+                window.hlsInstances[cameraId] = hls;
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = embedUrl;
+                video.addEventListener('loadedmetadata', () => {
+                    video.play().catch(e => console.log('Autoplay prevented:', e));
+                });
+            } else {
+                console.error('HLS not supported on this browser');
+                video.insertAdjacentHTML('afterend', `<div class="text-red-500 text-center p-4">Browser tidak mendukung HLS. Silakan gunakan Chrome/Edge/Firefox.</div>`);
+            }
+        }
+        
+        function detectEmbedType(url) {
+            if (!url) return 'custom';
+            const urlLower = url.toLowerCase();
+            if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) return 'youtube';
+            if (urlLower.includes('.m3u8')) return 'hls';
+            if (urlLower.includes('.mpd')) return 'dash';
+            return 'iframe';
+        }
+
+        // --- Core Functions ---
+        function toggleCameraSelection(id) {
+            const isMobile = window.innerWidth < 1024;
+            if (isMobile) {
+                selectedCameraIds = [String(id)];
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                const idx = selectedCameraIds.indexOf(String(id));
+                if (idx === -1) {
+                    // No limit - allow unlimited cameras
+                    selectedCameraIds.push(String(id));
+                } else {
+                    selectedCameraIds.splice(idx, 1);
+                }
+            }
+            updateGrid();
+            renderMobileList();
+            saveState();
+        }
+
+        function updateGrid() {
+            const grid = document.getElementById('live-grid');
+            const count = selectedCameraIds.length;
+            
+            // Kill old streams
+            Object.values(hlsInstances).forEach(h => h.destroy());
+            hlsInstances = {};
+
+            // Update Desktop UI sidebar
+            document.querySelectorAll('#camera-list .camera-item').forEach(el => {
+                const isSelected = selectedCameraIds.includes(el.dataset.id);
+                el.classList.toggle('selected', isSelected);
+                el.querySelector('.status-indicator').classList.toggle('hidden', !isSelected);
+            });
+
+            if (count === 0) {
+                grid.className = 'live-grid grid-1 flex-1 min-h-0';
+                grid.innerHTML = `<div class="empty-slot animate-fade-in flex-col gap-4">
+                    <svg class="w-12 h-12 text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    <p class="text-xs font-black uppercase tracking-widest text-slate-800">Pilih Kamera</p>
+                </div>`;
+                return;
+            }
+
+            // Dynamic grid layout based on camera count
+            let gridClass = 'grid-2'; // default
+            if (count === 1) gridClass = 'grid-1';
+            else if (count <= 4) gridClass = 'grid-4';
+            else if (count <= 6) gridClass = 'grid-6';
+            else if (count <= 9) gridClass = 'grid-9';
+            else if (count <= 12) gridClass = 'grid-12';
+            else gridClass = 'grid-16';
+            
+            grid.className = `live-grid ${gridClass} flex-1 min-h-0`;
+            grid.innerHTML = selectedCameraIds.map(id => {
+                const cam = cameras.find(c => String(c.id) === id);
+                const isEmbed = cam && cam.camera_type === 'embed';
+                
+                return `
+                <div class="video-wrapper group relative bg-black aspect-video rounded-none overflow-hidden border border-slate-900 flex items-center justify-center hover-lift" id="wrapper-${id}">
+                    ${isEmbed ? `<div id="embed-${id}" class="w-full h-full"></div>` : `
+                        <video id="video-${id}" class="w-full h-full object-cover lg:object-contain" playsinline autoplay muted></video>
+                        <div class="video-loading" id="loading-${id}">
+                            <div class="loading-spinner"></div>
+                            <span class="text-xs text-slate-300 font-medium">Loading stream...</span>
+                        </div>
+                    `}
+                    <!-- Label -->
+                    <div class="absolute top-2 left-2 px-2 py-1 bg-slate-950/80 rounded text-[8px] font-black ${isEmbed ? 'text-cyan-400' : 'text-emerald-500'} uppercase border ${isEmbed ? 'border-cyan-500/20' : 'border-emerald-500/20'}">
+                        ${cam?.nama || 'Camera'} ${isEmbed ? '🌐' : ''}
+                        <div class="inline-block w-1.5 h-1.5 bg-current rounded-full pulse-dot ml-1"></div>
+                    </div>
+                    <!-- Controls Overlay -->
+                    ${!isEmbed ? `<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex gap-2">
+                        <button onclick="takeScreenshot('video-${id}', '${cam?.nama || 'Camera'}')" class="p-1.5 bg-slate-950/80 text-white rounded-lg hover:bg-blue-600 transition shadow-xl border border-white/10 btn-press" title="Screenshot">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        </button>
+                        <button onclick="toggleFullscreen('video-${id}')" class="p-1.5 bg-slate-950/80 text-white rounded-lg hover:bg-emerald-600 transition shadow-xl border border-white/10 btn-press" title="Fullscreen">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                        </button>
+                    </div>` : ''}
+                </div>
+                `;
+            }).join('');
+
+            selectedCameraIds.forEach(id => {
+                const cam = cameras.find(c => String(c.id) === id);
+                if (!cam) return;
+
+                const wrapper = document.getElementById(`wrapper-${id}`);
+                
+                if (!cam.isPlayable) {
+                    wrapper.innerHTML = `
+                        <div class="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center p-6 text-center">
+                            <svg class="w-10 h-10 text-rose-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            <h4 class="text-[10px] font-black text-white uppercase tracking-widest mb-1">${cam.nama} TERKUNCI</h4>
+                            <p class="text-[8px] text-slate-400 uppercase mb-4">Butuh Level ${cam.level.toUpperCase()}</p>
+                            <a href="${basePath}/user/login" class="px-4 py-2 bg-emerald-600 text-white text-[8px] font-black rounded-lg uppercase tracking-widest">Upgrade / Login</a>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Handle Embed Camera
+                if (cam.camera_type === 'embed') {
+                    const embedContainer = document.getElementById(`embed-${id}`);
+                    if (embedContainer && cam.embed_url) {
+                        const embedType = cam.embed_type || detectEmbedType(cam.embed_url);
+                        embedContainer.innerHTML = generateEmbedHtml(cam);
+                        // Initialize HLS if needed (script in innerHTML won't execute)
+                        if (embedType === 'hls') {
+                            setTimeout(() => initEmbedHls(cam.id, cam.embed_url), 100);
+                        }
+                    }
+                    return;
+                }
+
+                // Handle RTSP Camera (existing logic)
+                const v = document.getElementById(`video-${id}`);
+                if (!v) {
+                    console.warn(`Video element not found for camera ${id}`);
+                    return;
+                }
+
+                const primaryUrl = `${hlsBase}/cam_${id}/index.m3u8`;
+                const fallbackUrl = `${hlsBase}/cam_${id}_input/index.m3u8`;
+                
+                console.log(`Initializing HLS for camera ${id}:`, primaryUrl);
+                
+                // Destroy existing instance
+                if (hlsInstances[id]) {
+                    hlsInstances[id].destroy();
+                    delete hlsInstances[id];
+                }
+                
+                // Helper function to hide loading indicator
+                const hideLoading = () => {
+                    const loadingEl = document.getElementById(`loading-${id}`);
+                    if (loadingEl && loadingEl.style.display !== 'none') {
+                        loadingEl.style.opacity = '0';
+                        setTimeout(() => {
+                            loadingEl.style.display = 'none';
+                        }, 300);
+                    }
+                };
+                
+                // Timeout to force hide loading after 15 seconds
+                const loadingTimeout = setTimeout(() => {
+                    console.warn(`Loading timeout for camera ${id}, hiding loading indicator`);
+                    hideLoading();
+                }, 15000);
+                
+                // Clear timeout when loading is hidden
+                const originalHideLoading = hideLoading;
+                const hideLoadingWithTimeout = () => {
+                    clearTimeout(loadingTimeout);
+                    originalHideLoading();
+                };
+                
+                if (Hls.isSupported()) {
+                    const hls = new Hls({
+                        manifestLoadingMaxRetry: 2,
+                        manifestLoadingRetryDelay: 1000,
+                        debug: false
+                    });
+                    
+                    hls.loadSource(primaryUrl);
+                    hls.attachMedia(v);
+                    
+                    // Hide loading when video starts playing
+                    v.addEventListener('playing', hideLoadingWithTimeout, { once: true });
+                    v.addEventListener('canplay', hideLoadingWithTimeout, { once: true });
+                    
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                        console.log(`HLS manifest parsed for camera ${id}`);
+                        v.play().catch(e => console.warn(`Play failed for camera ${id}:`, e));
+                    });
+                    
+                    hls.on(Hls.Events.ERROR, (event, data) => {
+                        console.error(`HLS error for camera ${id}:`, data.type, data.details);
+                        if (data.fatal) {
+                            console.log(`Trying fallback URL for camera ${id}:`, fallbackUrl);
+                            hls.destroy();
+                            
+                            // Try fallback
+                            const hlsFallback = new Hls({
+                                manifestLoadingMaxRetry: 5,
+                                manifestLoadingRetryDelay: 1000
+                            });
+                            hlsFallback.loadSource(fallbackUrl);
+                            hlsFallback.attachMedia(v);
+                            
+                            // Add loading hide for fallback
+                            v.addEventListener('playing', hideLoadingWithTimeout, { once: true });
+                            
+                            hlsFallback.on(Hls.Events.MANIFEST_PARSED, () => {
+                                console.log(`Fallback HLS manifest parsed for camera ${id}`);
+                                v.play().catch(() => {});
+                            });
+                            hlsInstances[id] = hlsFallback;
+                        }
+                    });
+                    
+                    hlsInstances[id] = hls;
+                } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+                    // Native HLS support (Safari, iOS)
+                    console.log(`Using native HLS for camera ${id}`);
+                    
+                    v.addEventListener('playing', hideLoadingWithTimeout, { once: true });
+                    v.addEventListener('canplay', hideLoadingWithTimeout, { once: true });
+                    
+                    v.src = primaryUrl;
+                    v.play().catch(() => {
+                        console.log(`Primary URL failed for camera ${id}, trying fallback`);
+                        v.src = fallbackUrl;
+                        v.play().catch(() => {
+                            console.error(`Both URLs failed for camera ${id}`);
+                        });
+                    });
+                }
+            });
+        }
+
+        function renderMobileList() {
+            const list = document.getElementById('mobile-camera-list');
+            if (!list) return;
+            
+            const userLevel = (userStatus.customerLevel || 'umum').toLowerCase();
+            
+            list.innerHTML = cameras.map(cam => {
+                const camLevel = (cam.level || 'umum').toLowerCase();
+                let canView = userStatus.isAdmin || userLevel === 'admin';
+                
+                if (!canView) {
+                    const hierarchy = ['umum', 'member', 'vip', 'vvip', 'pemerintahan'];
+                    const uIdx = hierarchy.indexOf(userLevel);
+                    const cIdx = hierarchy.indexOf(camLevel);
+                    if (camLevel === 'umum') canView = true;
+                    else if (uIdx !== -1 && cIdx !== -1 && uIdx >= cIdx) canView = true;
+                }
+
+                const isSelected = selectedCameraIds.includes(String(cam.id));
+                const levelColors = {
+                    'umum': 'text-emerald-500',
+                    'member': 'text-blue-500',
+                    'vip': 'text-purple-500',
+                    'vvip': 'text-orange-500',
+                    'pemerintahan': 'text-sky-400',
+                    'admin': 'text-rose-500'
+                };
+                const colorClass = levelColors[camLevel] || 'text-slate-500';
+                
+                return `
+                    <div class="p-4 glass-panel rounded-2xl border ${isSelected ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-800'} transition flex items-center justify-between" onclick="toggleCameraSelection('${cam.id}')">
+                        <div class="flex items-center gap-4 flex-1 min-w-0">
+                            <div class="w-10 h-10 bg-slate-950 rounded-xl flex items-center justify-center border border-slate-800 text-slate-700 relative">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                <!-- Status Badge -->
+                                <div class="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-slate-950 camera-status-badge" data-camera-id="${cam.id}" title="Checking...">
+                                    <div class="w-full h-full rounded-full bg-slate-600 animate-pulse"></div>
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-[11px] font-black text-white uppercase truncate">${cam.nama}</h4>
+                                    ${!canView ? '<svg class="w-3 h-3 text-rose-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>' : ''}
+                                </div>
+                                <p class="text-[9px] text-sky-400 font-bold uppercase truncate tracking-wide">${cam.lokasi || 'Live'}</p>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-[7px] font-black ${colorClass} uppercase tracking-widest">
+                                        ${camLevel === 'umum' ? 'UMUM' : camLevel === 'member' ? 'MEMBER' : camLevel.toUpperCase()}
+                                    </span>
+                                    <span class="text-[7px] font-bold text-slate-500 uppercase tracking-widest camera-status-text" data-camera-id="${cam.id}">
+                                        • Checking...
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        ${isSelected ? '<div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse ml-3"></div>' : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- Utils ---
+        function switchMode(mode) {
+            viewMode = mode;
+            
+            // Update Desktop Tabs
+            const tLive = document.getElementById('tab-live');
+            const tMap = document.getElementById('tab-map');
+            if (tLive) tLive.classList.toggle('active', mode === 'live');
+            if (tMap) tMap.classList.toggle('active', mode === 'map');
+            if (tLive) tLive.classList.toggle('text-slate-500', mode !== 'live');
+            if (tMap) tMap.classList.toggle('text-slate-500', mode !== 'map');
+
+            // Update Mobile Bottom Bar
+            const mIconLive = document.getElementById('m-icon-live');
+            const mTextLive = document.getElementById('m-text-live');
+            const mIconMap = document.getElementById('m-icon-map');
+            const mTextMap = document.getElementById('m-text-map');
+
+            if (mode === 'live') {
+                if (mIconLive) mIconLive.className = 'p-2 rounded-xl bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all duration-300';
+                if (mTextLive) mTextLive.className = 'text-[9px] font-black text-emerald-500 uppercase tracking-widest';
+                if (mIconMap) mIconMap.className = 'p-2 rounded-xl text-slate-500 transition-all duration-300';
+                if (mTextMap) mTextMap.className = 'text-[9px] font-black text-slate-500 uppercase tracking-widest';
+            } else {
+                if (mIconLive) mIconLive.className = 'p-2 rounded-xl text-slate-500 transition-all duration-300';
+                if (mTextLive) mTextLive.className = 'text-[9px] font-black text-slate-500 uppercase tracking-widest';
+                if (mIconMap) mIconMap.className = 'p-2 rounded-xl bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all duration-300';
+                if (mTextMap) mTextMap.className = 'text-[9px] font-black text-emerald-500 uppercase tracking-widest';
+            }
+
+            document.getElementById('live-display').classList.toggle('hidden', mode === 'map');
+            document.getElementById('map-display').classList.toggle('hidden', mode === 'live');
+            
+            const mMain = document.getElementById('main-content-display');
+            const mList = document.getElementById('mobile-list-container');
+            
+            if (window.innerWidth < 1024) {
+                if (mode === 'map') {
+                    mMain.classList.replace('flex-none', 'flex-1');
+                    mMain.style.height = 'calc(100vh - 144px)'; // Adjust for header and bottom bar
+                    if (mList) mList.classList.add('hidden');
+                } else {
+                    mMain.classList.replace('flex-1', 'flex-none');
+                    mMain.style.height = '';
+                    if (mList) mList.classList.remove('hidden');
+                }
+            }
+            
+            saveState();
+            if (mode === 'map') {
+                initMap();
+                setTimeout(() => map.invalidateSize(), 300);
+            }
+        }
+
+        function initMap() {
+            if (map) return;
+            // Default view (will be overridden if there are cameras)
+            map = L.map('map', { zoomControl: false }).setView([-0.8173, 103.4616], 14);
+            
+            // Define base layers
+            const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                maxZoom: 19
+            });
+            
+            const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                maxZoom: 19
+            });
+            
+            const hybridLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '&copy; Esri',
+                maxZoom: 19
+            });
+            
+            const labelsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; CARTO',
+                maxZoom: 19
+            });
+            
+            // Add default layer
+            streetLayer.addTo(map);
+            
+            // Create layer control
+            const baseLayers = {
+                "🗺️ Peta Standar": streetLayer,
+                "🛰️ Satelit": satelliteLayer,
+                "🌍 Hybrid": L.layerGroup([hybridLayer, labelsLayer])
+            };
+            
+            // Add layer control with custom styling
+            const layerControl = L.control.layers(baseLayers, null, {
+                position: 'topright',
+                collapsed: false
+            }).addTo(map);
+            
+            // Custom styling for layer control
+            setTimeout(() => {
+                const controlContainer = document.querySelector('.leaflet-control-layers');
+                if (controlContainer) {
+                    controlContainer.style.background = 'rgba(15, 23, 42, 0.95)';
+                    controlContainer.style.backdropFilter = 'blur(12px)';
+                    controlContainer.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+                    controlContainer.style.borderRadius = '12px';
+                    controlContainer.style.padding = '12px';
+                    controlContainer.style.boxShadow = '0 10px 30px -10px rgba(0, 0, 0, 0.5)';
+                    
+                    const labels = controlContainer.querySelectorAll('label');
+                    labels.forEach(label => {
+                        label.style.color = '#f8fafc';
+                        label.style.fontSize = '11px';
+                        label.style.fontWeight = '600';
+                        label.style.padding = '6px 0';
+                        label.style.cursor = 'pointer';
+                        label.style.display = 'flex';
+                        label.style.alignItems = 'center';
+                        label.style.gap = '8px';
+                    });
+                    
+                    const inputs = controlContainer.querySelectorAll('input[type="radio"]');
+                    inputs.forEach(input => {
+                        input.style.accentColor = '#10b981';
+                        input.style.cursor = 'pointer';
+                    });
+                }
+            }, 100);
+            
+            const mapBounds = [];
+            
+            cameras.forEach(cam => {
+                if (cam.lat && cam.lng) {
+                    mapBounds.push([cam.lat, cam.lng]);
+                    const markerIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `
+                            <div class="relative group">
+                                <div class="w-8 h-8 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg border-2 border-white ring-2 ring-emerald-500/20 transform -rotate-45 hover:rotate-0 transition-all duration-500">
+                                    <svg class="w-5 h-5 transform rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                                    </svg>
+                                </div>
+                                <div class="absolute -bottom-1 -right-1 w-2 h-2 bg-white rounded-full flex items-center justify-center shadow-md">
+                                    <div class="w-1 h-1 bg-emerald-500 rounded-full animate-ping"></div>
+                                </div>
+                            </div>
+                        `,
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16]
+                    });
+                    
+                    const isEmbedCam = cam.camera_type === 'embed';
+                    const embedUrl = cam.embed_url || '';
+                    const isYoutube = embedUrl.includes('youtube.com') || embedUrl.includes('youtu.be') || embedUrl.includes('youtube-nocookie.com');
+                    const isEmbedHls = isEmbedCam && !isYoutube && (cam.embed_type === 'hls' || embedUrl.toLowerCase().includes('m3u8') || embedUrl.toLowerCase().includes('/hls/') || cam.embed_type !== 'iframe');
+                    let popupVideoHtml = '';
+                    
+                    if (isEmbedCam && (embedUrl.includes('youtube.com') || embedUrl.includes('youtu.be'))) {
+                        // YouTube embed
+                        let videoId = '';
+                        if (embedUrl.includes('youtube.com/watch?v=')) {
+                            videoId = embedUrl.split('v=')[1]?.split('&')[0];
+                        } else if (embedUrl.includes('youtube.com/embed/')) {
+                            videoId = embedUrl.split('embed/')[1]?.split('?')[0];
+                        } else if (embedUrl.includes('youtu.be/')) {
+                            videoId = embedUrl.split('youtu.be/')[1]?.split('?')[0];
+                        }
+                        if (videoId) {
+                            popupVideoHtml = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen class="w-full h-full"></iframe>`;
+                        } else {
+                            popupVideoHtml = `<iframe src="${embedUrl}" frameborder="0" allowfullscreen class="w-full h-full"></iframe>`;
+                        }
+                    } else if (isEmbedHls) {
+                        // Embed HLS camera - use video with HLS (just like RTSP)
+                        popupVideoHtml = `
+                            <video id="popup-video-${cam.id}" class="w-full h-full object-cover" muted playsinline preload="none"></video>
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none" id="popup-loading-${cam.id}">
+                                <span class="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></span>
+                            </div>
+                        `;
+                    } else if (isEmbedCam && embedUrl) {
+                        // Other embed URL (generic iframe, DASH, etc.)
+                        popupVideoHtml = `<iframe src="${embedUrl}" frameborder="0" allowfullscreen class="w-full h-full"></iframe>`;
+                    } else {
+                        // RTSP camera - use video with HLS
+                        popupVideoHtml = `
+                            <video id="popup-video-${cam.id}" class="w-full h-full object-cover" muted playsinline preload="none"></video>
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none" id="popup-loading-${cam.id}">
+                                <span class="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></span>
+                            </div>
+                        `;
+                    }
+                    
+                    const popupContent = `
+                        <div class="p-2 min-w-[220px]">
+                            <b class="text-slate-900 text-xs block mb-1">${cam.nama}</b>
+                            <p class="text-[10px] text-slate-500 mb-2 border-b border-slate-200 pb-2">${cam.lokasi || 'Kuala Tungkal'}</p>
+                            
+                            <div class="w-full bg-slate-900 rounded-lg overflow-hidden mb-2 aspect-video relative group cursor-pointer" onclick="selectFromMap('${cam.id}')" title="Klik untuk lihat penuh">
+                                ${popupVideoHtml}
+                                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center pointer-events-none">
+                                    <span class="text-[10px] font-bold text-white uppercase tracking-widest">Lihat Penuh</span>
+                                </div>
+                            </div>
+
+                            <div class="weather-data hidden mb-1 grid grid-cols-3 gap-1 text-center" id="popup-weather-${cam.id}">
+                                <div class="bg-slate-50 p-1 rounded border border-slate-100">
+                                    <span class="text-[8px] text-slate-400 block uppercase font-bold">Suhu</span>
+                                    <span class="text-[10px] font-black text-slate-700" id="pw-temp-${cam.id}">--</span>
+                                </div>
+                                <div class="bg-slate-50 p-1 rounded border border-slate-100">
+                                    <span class="text-[8px] text-slate-400 block uppercase font-bold">Angin</span>
+                                    <span class="text-[10px] font-black text-slate-700" id="pw-wind-${cam.id}">--</span>
+                                </div>
+                                <div class="bg-slate-50 p-1 rounded border border-slate-100">
+                                    <span class="text-[8px] text-slate-400 block uppercase font-bold">Ombak</span>
+                                    <span class="text-[10px] font-black text-slate-700" id="pw-wave-${cam.id}">--</span>
+                                </div>
+                                <div class="bg-slate-50 p-1 rounded border border-slate-100">
+                                    <span class="text-[8px] text-slate-400 block uppercase font-bold">Arah</span>
+                                    <span class="text-[10px] font-black text-slate-700" id="pw-wave-dir-${cam.id}">--</span>
+                                </div>
+                                <div class="bg-slate-50 p-1 rounded border border-slate-100">
+                                    <span class="text-[8px] text-slate-400 block uppercase font-bold">Periode</span>
+                                    <span class="text-[10px] font-black text-slate-700" id="pw-wave-period-${cam.id}">--</span>
+                                </div>
+                                <div class="bg-slate-50 p-1 rounded border border-slate-100">
+                                    <span class="text-[8px] text-slate-400 block uppercase font-bold">Peak</span>
+                                    <span class="text-[10px] font-black text-slate-700" id="pw-wave-peak-${cam.id}">--</span>
+                                </div>
+                                <div class="bg-slate-50 p-1 rounded border border-slate-100">
+                                    <span class="text-[8px] text-slate-400 block uppercase font-bold">SST</span>
+                                    <span class="text-[10px] font-black text-slate-700" id="pw-sst-${cam.id}">--</span>
+                                </div>
+                                <div class="bg-slate-50 p-1 rounded border border-slate-100">
+                                    <span class="text-[8px] text-slate-400 block uppercase font-bold">Arus</span>
+                                    <span class="text-[10px] font-black text-slate-700" id="pw-current-${cam.id}">--</span>
+                                </div>
+                                <div class="bg-slate-50 p-1 rounded border border-slate-100">
+                                    <span class="text-[8px] text-slate-400 block uppercase font-bold">Pasang</span>
+                                    <span class="text-[10px] font-black text-slate-700" id="pw-sea-${cam.id}">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    const marker = L.marker([cam.lat, cam.lng], { icon: markerIcon })
+                        .addTo(map)
+                        .bindPopup(popupContent, { maxWidth: 260 });
+
+                    marker.on('popupopen', async () => {
+                        const isYoutube = embedUrl.includes('youtube.com') || embedUrl.includes('youtu.be') || embedUrl.includes('youtube-nocookie.com');
+                        const isEmbedHls = cam.camera_type === 'embed' && !isYoutube && (cam.embed_type === 'hls' || embedUrl.toLowerCase().includes('m3u8') || embedUrl.toLowerCase().includes('/hls/') || cam.embed_type !== 'iframe');
+                        
+                        // Skip HLS initialization for non-HLS embed cameras (YouTube/iframe handled via HTML)
+                        if (cam.camera_type === 'embed' && !isEmbedHls) {
+                            const loadingEl = document.getElementById(`popup-loading-${cam.id}`);
+                            if (loadingEl) loadingEl.classList.add('hidden');
+                            return;
+                        }
+                        
+                        // 1. Setup Video Stream
+                        const videoEl = document.getElementById(`popup-video-${cam.id}`);
+                        const loadingEl = document.getElementById(`popup-loading-${cam.id}`);
+                        if (!videoEl) {
+                            if (loadingEl) loadingEl.classList.add('hidden');
+                            return;
+                        }
+                        const primaryUrl = isEmbedHls ? cam.embed_url : `${hlsBase}/cam_${cam.id}/index.m3u8`;
+                        const fallbackUrl = isEmbedHls ? null : `${hlsBase}/cam_${cam.id}_input/index.m3u8`;
+                        
+                        function startHls(url, isFallback = false) {
+                            if (marker.hlsInstance) { marker.hlsInstance.destroy(); marker.hlsInstance = null; }
+                            
+                            if (window.Hls && Hls.isSupported()) {
+                                const hls = new Hls({ manifestLoadingMaxRetry: isFallback ? 5 : 2 });
+                                hls.loadSource(url);
+                                hls.attachMedia(videoEl);
+                                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                                    videoEl.play().catch(e => {
+                                        setTimeout(() => {
+                                            if (loadingEl) loadingEl.classList.add('hidden');
+                                        }, 1000);
+                                    });
+                                    if (loadingEl) loadingEl.classList.add('hidden');
+                                });
+                                hls.on(Hls.Events.ERROR, (event, data) => {
+                                    if (data.fatal) {
+                                        if (!isFallback && fallbackUrl) {
+                                            console.warn(`Popup HLS error, trying fallback for camera ${cam.id}`);
+                                            startHls(fallbackUrl, true);
+                                        } else {
+                                            console.error(`Popup HLS failed for camera ${cam.id}`);
+                                            if (loadingEl) loadingEl.classList.add('hidden');
+                                            if (videoEl) {
+                                                videoEl.insertAdjacentHTML('afterend', 
+                                                    '<div class="absolute inset-0 flex items-center justify-center bg-slate-900/80 text-rose-500 text-xs font-bold uppercase tracking-widest">Stream Error</div>');
+                                            }
+                                        }
+                                    }
+                                });
+                                marker.hlsInstance = hls;
+                            } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+                                videoEl.src = url;
+                                videoEl.addEventListener('loadedmetadata', () => {
+                                    videoEl.play().catch(e => {});
+                                    if (loadingEl) loadingEl.classList.add('hidden');
+                                });
+                                videoEl.addEventListener('error', () => {
+                                    if (!isFallback && fallbackUrl) {
+                                        startHls(fallbackUrl, true);
+                                    } else {
+                                        if (loadingEl) loadingEl.classList.add('hidden');
+                                    }
+                                });
+                            } else {
+                                console.error('HLS not supported in this browser for popup');
+                                if (loadingEl) loadingEl.classList.add('hidden');
+                            }
+                        }
+                        
+                        startHls(primaryUrl);
+
+                        // 2. Fetch Localized Weather
+                        const weatherDiv = document.getElementById(`popup-weather-${cam.id}`);
+                        if (!weatherDiv || !weatherDiv.classList.contains('hidden')) return; 
+
+                        try {
+                            const res = await fetch(`${basePath}/api/weather?lat=${cam.lat}&lng=${cam.lng}`);
+                            const data = await res.json();
+                            if (data && data.success) {
+                                document.getElementById(`pw-temp-${cam.id}`).textContent = data.current ? `${Math.round(data.current.temperature_2m)}°C` : '-';
+                                document.getElementById(`pw-wind-${cam.id}`).textContent = data.current ? `${data.current.wind_speed_10m} km/h` : '-';
+                                
+                                const hourPart = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Jakarta', hour: 'numeric', hour12: false }).format(new Date());
+                                const nowIdx = parseInt(hourPart, 10);
+
+                                const mh = data.marine_hourly || {};
+                                const pick = (arr) => {
+                                    if (!Array.isArray(arr) || arr.length === 0) return null;
+                                    const v = arr[nowIdx];
+                                    if (v !== null && v !== undefined) return v;
+                                    const v0 = arr[0];
+                                    if (v0 !== null && v0 !== undefined) return v0;
+                                    return null;
+                                };
+
+                                const waveHeight = pick(mh.wave_height);
+                                document.getElementById(`pw-wave-${cam.id}`).textContent = (waveHeight !== null && waveHeight !== undefined) ? `${Number(waveHeight).toFixed(1)}m` : '-';
+
+                                const waveDir = pick(mh.wave_direction);
+                                document.getElementById(`pw-wave-dir-${cam.id}`).textContent = (waveDir !== null && waveDir !== undefined) ? `${Math.round(Number(waveDir))}°` : '-';
+
+                                const wavePeriod = pick(mh.wave_period);
+                                document.getElementById(`pw-wave-period-${cam.id}`).textContent = (wavePeriod !== null && wavePeriod !== undefined) ? `${Number(wavePeriod).toFixed(1)}s` : '-';
+
+                                const wavePeak = pick(mh.wave_peak_period);
+                                document.getElementById(`pw-wave-peak-${cam.id}`).textContent = (wavePeak !== null && wavePeak !== undefined) ? `${Number(wavePeak).toFixed(1)}s` : '-';
+
+                                const sst = pick(mh.sea_surface_temperature);
+                                document.getElementById(`pw-sst-${cam.id}`).textContent = (sst !== null && sst !== undefined) ? `${Number(sst).toFixed(1)}°C` : '-';
+
+                                const curVel = pick(mh.ocean_current_velocity);
+                                const curDir = pick(mh.ocean_current_direction);
+                                if (curVel !== null && curVel !== undefined) {
+                                    document.getElementById(`pw-current-${cam.id}`).textContent = `${Number(curVel).toFixed(1)} km/h${(curDir !== null && curDir !== undefined) ? ` • ${Math.round(Number(curDir))}°` : ''}`;
+                                } else {
+                                    document.getElementById(`pw-current-${cam.id}`).textContent = '-';
+                                }
+
+                                const sea = pick(mh.sea_level_height_msl);
+                                document.getElementById(`pw-sea-${cam.id}`).textContent = (sea !== null && sea !== undefined) ? `${Number(sea).toFixed(2)} m` : '-';
+                                weatherDiv.classList.remove('hidden');
+                            }
+                        } catch(e) {}
+                    });
+
+                    marker.on('popupclose', () => {
+                        if (marker.hlsInstance) {
+                            marker.hlsInstance.destroy();
+                            marker.hlsInstance = null;
+                        }
+                    });
+                }
+            });
+
+            if (mapBounds.length > 0) {
+                map.fitBounds(mapBounds, { padding: [30, 30], maxZoom: 16 });
+            }
+
+            // Trigger resize to fix grey tiles issue
+            setTimeout(() => map.invalidateSize(), 300);
+        }
+
+        function selectFromMap(id) {
+            // If mobile, clear others first for single view
+            if (window.innerWidth < 1024) {
+                selectedCameraIds = [id];
+            } else {
+                if (!selectedCameraIds.includes(id)) {
+                    selectedCameraIds.push(id);
+                }
+            }
+            saveState();
+            switchMode('live');
+            saveState();
+            updateGrid();
+        }
+
+        // --- Weather ---
+        async function updateWeather() {
+            try {
+                const res = await fetch(`${basePath}/api/weather`);
+                const data = await res.json();
+                if (data && data.success && data.current) {
+                    const temp = Math.round(data.current.temperature_2m);
+                    const code = data.current.weather_code;
+                    
+                    document.getElementById('weather-temp').textContent = `${temp}°C`;
+                    
+                    // Map WMO Codes to Emojis
+                    const weatherMap = {
+                        0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
+                        45: '🌫️', 48: '🌫️',
+                        51: '🌧️', 53: '🌧️', 55: '🌧️',
+                        61: '🌧️', 63: '🌧️', 65: '🌧️',
+                        80: '🌦️', 81: '🌦️', 82: '🌦️',
+                        95: '⛈️'
+                    };
+                    document.getElementById('weather-icon').textContent = weatherMap[code] || '🌤️';
+                    
+                    window.currentWeather = data;
+                }
+            } catch (e) {
+                console.error('Weather update failed', e);
+            }
+        }
+
+        function showWeatherDetail() {
+            const data = window.currentWeather;
+            if (!data || !data.current) return;
+            
+            const content = document.getElementById('modal-weather-content');
+            const marine = data.marine_hourly || {};
+            
+            // Helper function untuk konversi derajat ke kompas
+            function degToCompass(deg) {
+                const dirs = ['U', 'TL', 'T', 'TG', 'S', 'BD', 'B', 'BL'];
+                return dirs[Math.round(deg / 45) % 8];
+            }
+            
+            // Data maritim saat ini
+            let marineCurrentHtml = '';
+            if (marine && marine.wave_height && marine.wave_height.length > 0) {
+                const waveHeight = marine.wave_height[0] || 0;
+                const wavePeriod = marine.wave_period ? marine.wave_period[0] : 0;
+                const waveDirection = marine.wave_direction ? marine.wave_direction[0] : 0;
+                const seaTemp = marine.sea_surface_temperature ? marine.sea_surface_temperature[0] : null;
+                const oceanCurrent = marine.ocean_current_velocity ? marine.ocean_current_velocity[0] : null;
+                const oceanCurrentDir = marine.ocean_current_direction ? marine.ocean_current_direction[0] : null;
+                const seaLevel = marine.sea_level_height_msl ? marine.sea_level_height_msl[0] : null;
+                
+                // Status keamanan laut
+                let statusIcon = '🟢';
+                let statusText = 'Laut Tenang';
+                let statusDesc = 'Aman untuk semua aktivitas maritim';
+                let statusColor = 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/30';
+                
+                if (waveHeight >= 2.5) {
+                    statusIcon = '🔴';
+                    statusText = 'Laut Sangat Bergelombang';
+                    statusDesc = 'Berbahaya - Hindari pelayaran';
+                    statusColor = 'from-rose-500/20 to-rose-600/10 border-rose-500/30';
+                } else if (waveHeight >= 1.25) {
+                    statusIcon = '🟠';
+                    statusText = 'Laut Bergelombang';
+                    statusDesc = 'Tidak disarankan untuk kapal kecil';
+                    statusColor = 'from-orange-500/20 to-orange-600/10 border-orange-500/30';
+                } else if (waveHeight >= 0.5) {
+                    statusIcon = '🟡';
+                    statusText = 'Laut Sedikit Bergelombang';
+                    statusDesc = 'Hati-hati untuk kapal kecil';
+                    statusColor = 'from-yellow-500/20 to-yellow-600/10 border-yellow-500/30';
+                }
+                
+                marineCurrentHtml = `
+                    <div class="mt-6 space-y-4">
+                        <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data Maritim</h4>
+                        
+                        <!-- Status Keamanan Laut -->
+                        <div class="bg-gradient-to-r ${statusColor} p-4 rounded-xl border">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">${statusIcon}</span>
+                                <div>
+                                    <div class="text-sm font-bold text-white">${statusText}</div>
+                                    <div class="text-[10px] text-slate-300">${statusDesc}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Data Maritim Grid -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-cyan-950/30 p-4 rounded-xl border border-cyan-800/30">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-2xl">🌊</span>
+                                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ombak</div>
+                                </div>
+                                <div class="text-2xl font-black text-cyan-400">${waveHeight.toFixed(1)}m</div>
+                                <div class="text-xs text-slate-400 mt-1">Periode: ${wavePeriod.toFixed(1)}s</div>
+                                <div class="text-xs text-slate-400">Arah: ${Math.round(waveDirection)}° ${degToCompass(waveDirection)}</div>
+                            </div>
+                            
+                            ${seaTemp !== null ? `
+                            <div class="bg-slate-800/30 p-4 rounded-xl border border-slate-800">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-2xl">🌡️</span>
+                                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Suhu Laut</div>
+                                </div>
+                                <div class="text-2xl font-black text-emerald-400">${seaTemp.toFixed(1)}°C</div>
+                                <div class="text-xs text-slate-400 mt-1">Permukaan laut</div>
+                            </div>
+                            ` : ''}
+                            
+                            ${oceanCurrent !== null ? `
+                            <div class="bg-slate-800/30 p-4 rounded-xl border border-slate-800">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-2xl">🌀</span>
+                                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Arus Laut</div>
+                                </div>
+                                <div class="text-2xl font-black text-blue-400">${oceanCurrent.toFixed(2)} m/s</div>
+                                ${oceanCurrentDir !== null ? `<div class="text-xs text-slate-400 mt-1">Arah: ${Math.round(oceanCurrentDir)}° ${degToCompass(oceanCurrentDir)}</div>` : ''}
+                            </div>
+                            ` : ''}
+                            
+                            ${seaLevel !== null ? `
+                            <div class="bg-slate-800/30 p-4 rounded-xl border border-slate-800">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-2xl">📏</span>
+                                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tinggi Laut</div>
+                                </div>
+                                <div class="text-2xl font-black text-purple-400">${seaLevel.toFixed(2)}m</div>
+                                <div class="text-xs text-slate-400 mt-1">MSL (Mean Sea Level)</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Generate Daily HTML
+            let dailyHtml = '';
+            if (data.daily) {
+                for (let i = 0; i < 7; i++) {
+                    const date = new Date(data.daily.time[i]);
+                    const dayName = date.toLocaleDateString('id-ID', { weekday: 'short' });
+                    const code = data.daily.weather_code[i];
+                    const max = Math.round(data.daily.temperature_2m_max[i]);
+                    const min = Math.round(data.daily.temperature_2m_min[i]);
+                    
+                    const weatherMap = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 51: '🌧️', 61: '🌧️', 80: '🌦️', 95: '⛈️' };
+                    const icon = weatherMap[code] || '🌤️';
+
+                    dailyHtml += `
+                        <div class="flex flex-col items-center gap-2 p-2 min-w-[60px]">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase">${dayName}</span>
+                            <span class="text-2xl">${icon}</span>
+                            <div class="flex flex-col items-center">
+                                <span class="text-xs font-bold text-white">${max}°</span>
+                                <span class="text-[9px] text-slate-500">${min}°</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            // Generate Hourly HTML (next 12 hours)
+            let hourlyHtml = '';
+            if (data.hourly) {
+                const nowIdx = new Date().getHours();
+                for (let i = nowIdx; i < nowIdx + 12; i++) {
+                    const hour = i % 24;
+                    const temp = Math.round(data.hourly.temperature_2m[i]);
+                    const code = data.hourly.weather_code[i];
+                    const weatherMap = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 51: '🌧️', 61: '🌧️', 80: '🌦️', 95: '⛈️' };
+                    const icon = weatherMap[code] || '🌤️';
+
+                    hourlyHtml += `
+                        <div class="flex flex-col items-center gap-1 min-w-[50px]">
+                            <span class="text-[9px] text-slate-500">${hour.toString().padStart(2, '0')}.00</span>
+                            <span class="text-lg">${icon}</span>
+                            <span class="text-xs font-bold text-white">${temp}°</span>
+                        </div>
+                    `;
+                }
+            }
+
+            // Get location from API response
+            const locationText = data.source && data.source.lokasi
+                ? data.source.lokasi
+                : 'Lokasi Server (Config)';
+            
+            content.innerHTML = `
+                <div class="flex items-start justify-between mb-2">
+                    <div>
+                        <h4 class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">${locationText}</h4>
+                        <div class="flex items-center gap-4">
+                            <span class="text-6xl font-black text-white">${Math.round(data.current.temperature_2m)}°</span>
+                            <div class="text-sm text-slate-400">
+                                <p>Kelembapan: ${data.current.relative_humidity_2m}%</p>
+                                <p>Angin: ${data.current.wind_speed_10m} km/h</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-7xl">${document.getElementById('weather-icon').textContent}</div>
+                </div>
+                
+                ${marineCurrentHtml}                <div class="border-t border-slate-800 pt-6">
+                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">Prakiraan Per Jam</p>
+                    <div class="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                        ${hourlyHtml}
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-800 pt-6">
+                    <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">Prakiraan 7 Hari</p>
+                    <div class="flex justify-between gap-2 overflow-x-auto pb-2 no-scrollbar">
+                        ${dailyHtml}
+                    </div>
+                </div>
+            `;
+            
+            const modal = document.getElementById('weatherModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeWeatherModal() {
+            const modal = document.getElementById('weatherModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
+        function closeWeatherModalOnBackdrop(event) {
+            // Close modal hanya jika klik di backdrop (bukan di konten modal)
+            if (event.target.id === 'weatherModal') {
+                closeWeatherModal();
+            }
+        }
+
+        // --- Persistence ---
+        function saveState() {
+            const state = {
+                selected: selectedCameraIds,
+                mode: viewMode
+            };
+            localStorage.setItem('cctv_state', JSON.stringify(state));
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem('cctv_state');
+            if (saved) {
+                try {
+                    const state = JSON.parse(saved);
+                    // Validate camera IDs - only keep IDs that exist in current cameras list
+                    const validIds = (state.selected || []).filter(id =>
+                        cameras.some(cam => String(cam.id) === String(id))
+                    );
+                    selectedCameraIds = validIds;
+                    console.log('Loaded state - Valid camera IDs:', validIds);
+                    
+                    if (state.mode) {
+                        setTimeout(() => switchMode(state.mode), 100);
+                    }
+                    updateGrid();
+                } catch (e) {
+                    console.error('Failed to load state', e);
+                    selectedCameraIds = []; // Reset to empty on error
+                    updateGrid();
+                }
+            }
+        }
+
+        function toggleFullscreen(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (el.requestFullscreen) el.requestFullscreen();
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            else if (el.msRequestFullscreen) el.msRequestFullscreen();
+        }
+
+        // ===== SCREENSHOT FUNCTIONALITY =====
+        function takeScreenshot(videoId, cameraName) {
+            const video = document.getElementById(videoId);
+            if (!video) {
+                showNotification('❌ Video tidak ditemukan', 'error');
+                return;
+            }
+
+            try {
+                // Create canvas
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Set canvas size to video size
+                canvas.width = video.videoWidth || video.clientWidth;
+                canvas.height = video.videoHeight || video.clientHeight;
+                
+                // Draw video frame to canvas
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Add timestamp and camera name overlay
+                const now = new Date();
+                const timestamp = now.toLocaleString('id-ID', { 
+                    timeZone: 'Asia/Jakarta',
+                    year: 'numeric',
+                    month: '2-digit', 
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                // Overlay styling
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(10, canvas.height - 60, canvas.width - 20, 50);
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 16px Inter, sans-serif';
+                ctx.fillText(cameraName, 20, canvas.height - 35);
+                
+                ctx.fillStyle = '#10b981';
+                ctx.font = '14px Inter, sans-serif';
+                ctx.fillText(timestamp, 20, canvas.height - 15);
+                
+                // Convert to blob and download
+                canvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${cameraName.replace(/[^a-zA-Z0-9]/g, '_')}_${now.getTime()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    showNotification('📸 Screenshot berhasil disimpan', 'success');
+                }, 'image/png', 0.9);
+                
+            } catch (error) {
+                console.error('Screenshot error:', error);
+                showNotification('❌ Gagal mengambil screenshot', 'error');
+            }
+        }
+
+        // ===== NOTIFICATION SYSTEM =====
+        function showNotification(message, type = 'info') {
+            // Remove existing notification
+            const existing = document.getElementById('notification');
+            if (existing) {
+                existing.classList.add('notification-exit');
+                setTimeout(() => existing.remove(), 300);
+            }
+            
+            // Create notification
+            const notification = document.createElement('div');
+            notification.id = 'notification';
+            notification.className = `fixed top-4 right-4 z-[200] px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-md max-w-sm notification-enter`;
+            
+            // Style based on type
+            if (type === 'success') {
+                notification.className += ' bg-emerald-500/90 border-emerald-400 text-white';
+            } else if (type === 'error') {
+                notification.className += ' bg-rose-500/90 border-rose-400 text-white';
+            } else if (type === 'warning') {
+                notification.className += ' bg-amber-500/90 border-amber-400 text-white';
+            } else {
+                notification.className += ' bg-slate-900/90 border-slate-700 text-slate-200';
+            }
+            
+            notification.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="text-sm font-bold">${message}</span>
+                    <button onclick="closeNotification(this)" class="ml-auto text-white/70 hover:text-white transition btn-press">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto remove after 4 seconds
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    closeNotification(notification.querySelector('button'));
+                }
+            }, 4000);
+        }
+        
+        function closeNotification(button) {
+            const notification = button.closest('#notification');
+            if (notification) {
+                notification.classList.remove('notification-enter');
+                notification.classList.add('notification-exit');
+                setTimeout(() => notification.remove(), 300);
+            }
+        }
+
+        function openReportModal() {
+            document.getElementById('reportModal').classList.remove('hidden');
+            document.getElementById('reportModal').classList.add('flex');
+        }
+
+        function closeReportModal() {
+            document.getElementById('reportModal').classList.add('hidden');
+            document.getElementById('reportModal').classList.remove('flex');
+        }
+
+        document.getElementById('reportForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            
+            try {
+                const res = await fetch(`${basePath}/api/reports/submit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    alert('Laporan berhasil dikirim. Terima kasih atas laporannya.');
+                    closeReportModal();
+                    this.reset();
+                } else {
+                    alert('Gagal mengirim laporan: ' + result.message);
+                }
+            } catch (e) {
+                alert('Terjadi kesalahan saat mengirim laporan.');
+            }
+        };
+
+        // --- Search Logic ---
+        function filterCameras(term, listId = 'camera-list') {
+            term = term.toLowerCase();
+            const items = document.querySelectorAll(`#${listId} .camera-item, #${listId} .p-4.glass-panel`);
+            items.forEach(item => {
+                const name = (item.dataset.nama || item.querySelector('h4')?.textContent || '').toLowerCase();
+                const location = (item.querySelector('p')?.textContent || '').toLowerCase();
+                const level = (item.querySelector('span')?.textContent || '').toLowerCase();
+                const matches = name.includes(term) || location.includes(term) || level.includes(term);
+                item.classList.toggle('hidden', !matches);
+            });
+        }
+
+        document.getElementById('camera-search')?.addEventListener('input', (e) => filterCameras(e.target.value, 'camera-list'));
+        document.getElementById('mobile-search')?.addEventListener('input', (e) => filterCameras(e.target.value, 'mobile-camera-list'));
+
+        function updateClock() {
+            const now = new Date();
+            const options = { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            const timeStr = now.toLocaleTimeString('en-GB', options);
+            const dateStr = now.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' });
+            
+            const clockEl = document.getElementById('topbar-clock');
+            const dateEl = document.getElementById('topbar-date');
+            const mClockEl = document.getElementById('modal-clock');
+            const mDateEl = document.getElementById('modal-date');
+            
+            if (clockEl) clockEl.textContent = timeStr;
+            if (dateEl) dateEl.textContent = dateStr;
+            if (mClockEl) mClockEl.textContent = timeStr;
+            if (mDateEl) mDateEl.textContent = dateStr;
+        }
+
+        function showTimeModal() {
+            document.getElementById('timeModal').classList.remove('hidden');
+            document.getElementById('timeModal').classList.add('flex');
+        }
+        function closeTimeModal() {
+            document.getElementById('timeModal').classList.add('hidden');
+            document.getElementById('timeModal').classList.remove('flex');
+        }
+
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // ===== THEME MANAGEMENT =====
+        const THEMES = ['dark', 'light', 'auto'];
+        let currentThemeIndex = 0;
+        
+        function getSystemTheme() {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        
+        function applyTheme(theme) {
+            const root = document.documentElement;
+            const actualTheme = theme === 'auto' ? getSystemTheme() : theme;
+            
+            if (actualTheme === 'light') {
+                root.setAttribute('data-theme', 'light');
+            } else {
+                root.removeAttribute('data-theme');
+            }
+            
+            // Update theme color meta tag
+            const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+            if (metaThemeColor) {
+                metaThemeColor.setAttribute('content', actualTheme === 'light' ? '#f8fafc' : '#0f172a');
+            }
+            
+            // Update icon visibility
+            document.getElementById('theme-icon-dark').classList.toggle('hidden', theme !== 'dark');
+            document.getElementById('theme-icon-light').classList.toggle('hidden', theme !== 'light');
+            document.getElementById('theme-icon-auto').classList.toggle('hidden', theme !== 'auto');
+            
+            // Update button title
+            const titles = {
+                'dark': 'Mode: Gelap 🌙',
+                'light': 'Mode: Terang ☀️',
+                'auto': 'Mode: Otomatis 🌓'
+            };
+            document.getElementById('theme-toggle-btn').setAttribute('title', titles[theme]);
+        }
+        
+        function cycleTheme() {
+            currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
+            const newTheme = THEMES[currentThemeIndex];
+            localStorage.setItem('cctv_theme', newTheme);
+            applyTheme(newTheme);
+        }
+        
+        function initTheme() {
+            const savedTheme = localStorage.getItem('cctv_theme') || 'dark';
+            currentThemeIndex = THEMES.indexOf(savedTheme);
+            if (currentThemeIndex === -1) currentThemeIndex = 0;
+            applyTheme(THEMES[currentThemeIndex]);
+            
+            // Listen for system theme changes when in auto mode
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                const currentTheme = THEMES[currentThemeIndex];
+                if (currentTheme === 'auto') {
+                    applyTheme('auto');
+                }
+            });
+        }
+        
+        // Initialize theme immediately (before page load)
+        initTheme();
+
+        // ===== CAMERA STATUS MANAGEMENT =====
+        let cameraStatusData = {};
+        
+        async function fetchCameraStatus() {
+            try {
+                const response = await fetch(`${basePath}/api/cameras/status`);
+                const data = await response.json();
+                
+                if (data.success && data.cameras) {
+                    cameraStatusData = data.cameras;
+                    updateCameraStatusUI();
+                }
+            } catch (error) {
+                console.error('Failed to fetch camera status:', error);
+            }
+        }
+        
+        // ===== SIDEBAR TOGGLE =====
+        function toggleSidebar() {
+            const sidebar = document.getElementById('desktopSidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            const arrow = document.getElementById('sidebarArrow');
+            
+            const isClosed = sidebar.classList.contains('sidebar-closed');
+            
+            const mainContent = document.getElementById('main-content-display');
+            
+            if (!isClosed) {
+                // Close sidebar
+                sidebar.classList.add('sidebar-closed');
+                if (mainContent) mainContent.classList.add('sidebar-closed');
+                toggle.classList.remove('toggle-hidden');
+                toggle.classList.add('toggle-visible');
+                if (arrow) {
+                    arrow.style.transform = 'rotate(0deg)';
+                    arrow.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14m7-7l-7 7-7-7"></path>';
+                }
+                localStorage.setItem('sidebar_collapsed', 'true');
+            } else {
+                // Open sidebar
+                sidebar.classList.remove('sidebar-closed');
+                if (mainContent) mainContent.classList.remove('sidebar-closed');
+                toggle.classList.remove('toggle-visible');
+                toggle.classList.add('toggle-hidden');
+                if (arrow) {
+                    arrow.style.transform = 'rotate(180deg)';
+                    arrow.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>';
+                }
+                localStorage.setItem('sidebar_collapsed', 'false');
+            }
+            
+            // Trigger resize for map if visible
+            setTimeout(() => {
+                if (map) map.invalidateSize();
+            }, 450);
+        }
+        
+        // Load sidebar state on init
+        function loadSidebarState() {
+            const collapsed = localStorage.getItem('sidebar_collapsed');
+            if (collapsed === 'true') {
+                const sidebar = document.getElementById('desktopSidebar');
+                const toggle = document.getElementById('sidebarToggle');
+                const mainContent = document.getElementById('main-content-display');
+                if (sidebar) sidebar.classList.add('sidebar-closed');
+                if (mainContent) mainContent.classList.add('sidebar-closed');
+                if (toggle) {
+                    toggle.classList.remove('toggle-hidden');
+                    toggle.classList.add('toggle-visible');
+                }
+            }
+        }
+
+        // Fetch status immediately and then every 30 seconds
+        fetchCameraStatus();
+        setInterval(fetchCameraStatus, 30000);
+        
+        // Update sidebar online/offline counts
+        function updateCameraStatusUI() {
+            // Count unique camera IDs to avoid double counting (desktop + mobile badges)
+            const countedCameras = new Set();
+            let onlineCount = 0;
+            let offlineCount = 0;
+            
+            // Update all status badges (both desktop and mobile)
+            document.querySelectorAll('.camera-status-badge').forEach(badge => {
+                const cameraId = badge.getAttribute('data-camera-id');
+                const status = cameraStatusData[cameraId];
+                const innerDiv = badge.querySelector('div');
+                
+                if (status && status.online) {
+                    innerDiv.className = 'w-full h-full rounded-full bg-emerald-500';
+                    innerDiv.style.animation = 'none';
+                    badge.setAttribute('title', 'Online');
+                    if (!countedCameras.has(cameraId)) {
+                        countedCameras.add(cameraId);
+                        onlineCount++;
+                    }
+                } else if (status && !status.online) {
+                    innerDiv.className = 'w-full h-full rounded-full bg-rose-500';
+                    innerDiv.style.animation = 'none';
+                    badge.setAttribute('title', 'Offline');
+                    if (!countedCameras.has(cameraId)) {
+                        countedCameras.add(cameraId);
+                        offlineCount++;
+                    }
+                } else {
+                    innerDiv.className = 'w-full h-full rounded-full bg-slate-600 animate-pulse';
+                    badge.setAttribute('title', 'Checking...');
+                }
+            });
+            
+            // Update status text
+            document.querySelectorAll('.camera-status-text').forEach(text => {
+                const cameraId = text.getAttribute('data-camera-id');
+                const status = cameraStatusData[cameraId];
+                
+                if (status && status.online) {
+                    text.textContent = '• Online';
+                    text.className = 'text-[7px] font-bold text-emerald-500 uppercase tracking-widest camera-status-text';
+                } else if (status && !status.online) {
+                    text.textContent = '• Offline';
+                    text.className = 'text-[7px] font-bold text-rose-500 uppercase tracking-widest camera-status-text';
+                } else {
+                    text.textContent = '• Checking...';
+                    text.className = 'text-[7px] font-bold text-slate-600 uppercase tracking-widest camera-status-text';
+                }
+            });
+            
+            // Update sidebar footer counts
+            const onlineEl = document.getElementById('sidebarOnlineCount');
+            const offlineEl = document.getElementById('sidebarOfflineCount');
+            if (onlineEl) onlineEl.textContent = onlineCount;
+            if (offlineEl) offlineEl.textContent = offlineCount;
+            
+            // Update mobile footer counts
+            const mobileOnlineEl = document.getElementById('mobileOnlineCount');
+            const mobileOfflineEl = document.getElementById('mobileOfflineCount');
+            if (mobileOnlineEl) mobileOnlineEl.textContent = onlineCount;
+            if (mobileOfflineEl) mobileOfflineEl.textContent = offlineCount;
+        }
+
+        // ===== KEYBOARD SHORTCUTS =====
+        document.addEventListener('keydown', (e) => {
+            // Ignore if user is typing in input fields
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+                return;
+            }
+            
+            switch(e.key.toLowerCase()) {
+                case ' ': // Spacebar - Toggle play/pause for all videos
+                    e.preventDefault();
+                    const videos = document.querySelectorAll('video');
+                    videos.forEach(video => {
+                        if (video.paused) {
+                            video.play().catch(() => {});
+                        } else {
+                            video.pause();
+                        }
+                    });
+                    showNotification(videos.length > 0 ? '⏯️ Toggle play/pause' : 'ℹ️ Tidak ada video aktif', 'info');
+                    break;
+                    
+                case 'f': // F - Fullscreen first video
+                    e.preventDefault();
+                    const firstVideo = document.querySelector('video');
+                    if (firstVideo) {
+                        toggleFullscreen(firstVideo.id);
+                        showNotification('🔍 Fullscreen mode', 'info');
+                    }
+                    break;
+                    
+                case 's': // S - Screenshot first video
+                    e.preventDefault();
+                    const videoForScreenshot = document.querySelector('video');
+                    if (videoForScreenshot) {
+                        const cameraName = selectedCameraIds.length > 0 ? 
+                            cameras.find(c => String(c.id) === selectedCameraIds[0])?.nama || 'Camera' : 
+                            'Camera';
+                        takeScreenshot(videoForScreenshot.id, cameraName);
+                    } else {
+                        showNotification('ℹ️ Tidak ada video untuk screenshot', 'info');
+                    }
+                    break;
+                    
+                case 'm': // M - Toggle between Live and Map
+                    e.preventDefault();
+                    const newMode = viewMode === 'live' ? 'map' : 'live';
+                    switchMode(newMode);
+                    showNotification(`🗺️ Mode: ${newMode === 'live' ? 'Live' : 'Peta'}`, 'info');
+                    break;
+                    
+                case 't': // T - Toggle theme
+                    e.preventDefault();
+                    cycleTheme();
+                    break;
+                    
+                case 'escape': // ESC - Clear selection
+                    e.preventDefault();
+                    selectedCameraIds = [];
+                    updateGrid();
+                    showNotification('🔄 Selection cleared', 'info');
+                    break;
+                    
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    // Number keys - Quick select camera
+                    e.preventDefault();
+                    const cameraIndex = parseInt(e.key) - 1;
+                    if (cameras[cameraIndex]) {
+                        const cameraId = String(cameras[cameraIndex].id);
+                        if (!selectedCameraIds.includes(cameraId)) {
+                            selectedCameraIds = [cameraId]; // Replace selection
+                            updateGrid();
+                            showNotification(`📹 ${cameras[cameraIndex].nama}`, 'success');
+                        }
+                    }
+                    break;
+                    
+                case '?': // ? - Show help
+                    e.preventDefault();
+                    showKeyboardHelp();
+                    break;
+            }
+        });
+        
+        function showKeyboardHelp() {
+            const helpModal = document.createElement('div');
+            helpModal.className = 'fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm';
+            helpModal.onclick = (e) => {
+                if (e.target === helpModal) helpModal.remove();
+            };
+            
+            helpModal.innerHTML = `
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-white">⌨️ Keyboard Shortcuts</h3>
+                        <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between"><kbd class="px-2 py-1 bg-slate-800 rounded text-xs">Space</kbd><span class="text-slate-300">Play/Pause videos</span></div>
+                        <div class="flex justify-between"><kbd class="px-2 py-1 bg-slate-800 rounded text-xs">F</kbd><span class="text-slate-300">Fullscreen</span></div>
+                        <div class="flex justify-between"><kbd class="px-2 py-1 bg-slate-800 rounded text-xs">S</kbd><span class="text-slate-300">Screenshot</span></div>
+                        <div class="flex justify-between"><kbd class="px-2 py-1 bg-slate-800 rounded text-xs">M</kbd><span class="text-slate-300">Toggle Live/Map</span></div>
+                        <div class="flex justify-between"><kbd class="px-2 py-1 bg-slate-800 rounded text-xs">T</kbd><span class="text-slate-300">Toggle Theme</span></div>
+                        <div class="flex justify-between"><kbd class="px-2 py-1 bg-slate-800 rounded text-xs">ESC</kbd><span class="text-slate-300">Clear selection</span></div>
+                        <div class="flex justify-between"><kbd class="px-2 py-1 bg-slate-800 rounded text-xs">1-9</kbd><span class="text-slate-300">Quick select camera</span></div>
+                        <div class="flex justify-between"><kbd class="px-2 py-1 bg-slate-800 rounded text-xs">?</kbd><span class="text-slate-300">Show this help</span></div>
+                    </div>
+                    <button onclick="this.closest('.fixed').remove()" class="mt-4 w-full py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-500 transition">
+                        Got it!
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(helpModal);
+        }
+
+        // ===== GRID LAYOUT PRESETS =====
+        function setGridPreset(maxCameras) {
+            if (cameras.length === 0) {
+                showNotification('ℹ️ Tidak ada kamera tersedia', 'info');
+                return;
+            }
+            
+            // Select first N cameras
+            const availableCameras = cameras.filter(cam => cam.isPlayable !== false);
+            const camerasToSelect = availableCameras.slice(0, maxCameras).map(cam => String(cam.id));
+            
+            if (camerasToSelect.length === 0) {
+                showNotification('ℹ️ Tidak ada kamera yang dapat diakses', 'info');
+                return;
+            }
+            
+            selectedCameraIds = camerasToSelect;
+            updateGrid();
+            
+            const gridNames = {
+                1: '1×1',
+                4: '2×2', 
+                9: '3×3',
+                16: '4×4'
+            };
+            
+            showNotification(`📺 Grid ${gridNames[maxCameras]} (${camerasToSelect.length} kamera)`, 'success');
+        }
+
+        // ===== PERFORMANCE OPTIMIZATIONS =====
+        
+        // Lazy loading for video elements
+        const videoObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const video = entry.target;
+                    if (video.dataset.src && !video.src) {
+                        video.src = video.dataset.src;
+                        video.load();
+                    }
+                }
+            });
+        }, { threshold: 0.1 });
+        
+        // Debounced resize handler
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 250);
+        });
+        
+        // Memory cleanup for HLS instances
+        function cleanupHlsInstances() {
+            Object.keys(hlsInstances).forEach(id => {
+                if (!selectedCameraIds.includes(id)) {
+                    if (hlsInstances[id]) {
+                        hlsInstances[id].destroy();
+                        delete hlsInstances[id];
+                    }
+                }
+            });
+        }
+        
+        // Auto cleanup every 2 minutes
+        setInterval(cleanupHlsInstances, 120000);
+        
+        // Visibility API - pause videos when tab is hidden
+        document.addEventListener('visibilitychange', () => {
+            const videos = document.querySelectorAll('video');
+            if (document.hidden) {
+                videos.forEach(video => {
+                    video.dataset.wasPlaying = !video.paused;
+                    video.pause();
+                });
+            } else {
+                videos.forEach(video => {
+                    if (video.dataset.wasPlaying === 'true') {
+                        video.play().catch(() => {});
+                    }
+                });
+            }
+        });
+
+        window.onload = () => { 
+            renderMobileList(); 
+            loadState();
+            loadSidebarState();
+            updateWeather();
+            setInterval(updateWeather, 300000); // 5 minutes
+        };
+    </script>
+    <script>
+        (() => {
+            const basePath = '<%= base_path %>' || '';
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register(`${basePath}/sw.js`).catch(() => { });
+                });
+            }
+
+            let deferredPrompt = null;
+            const showBanner = () => {
+                if (document.getElementById('pwa-install-banner')) return;
+                const banner = document.createElement('div');
+                banner.id = 'pwa-install-banner';
+                banner.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(2,6,23,0.95);border:1px solid rgba(148,163,184,0.25);border-radius:14px;color:#e2e8f0;font:700 12px/1.2 Inter, system-ui, sans-serif;';
+                banner.innerHTML = '<div style="display:flex;flex-direction:column;gap:2px"><div style="font-weight:900;letter-spacing:.08em;text-transform:uppercase;font-size:10px;color:#94a3b8">Install</div><div>Pasang aplikasi untuk akses lebih cepat.</div></div><div style="display:flex;gap:8px;flex-shrink:0"><button id="pwa-install-btn" style="padding:8px 10px;border-radius:10px;background:#10b981;color:#020617;border:0;font-weight:900;font-size:12px;cursor:pointer">Install</button><button id="pwa-close-btn" style="padding:8px 10px;border-radius:10px;background:transparent;color:#94a3b8;border:1px solid rgba(148,163,184,0.35);font-weight:900;font-size:12px;cursor:pointer">Tutup</button></div>';
+                document.body.appendChild(banner);
+                document.getElementById('pwa-close-btn').onclick = () => banner.remove();
+                document.getElementById('pwa-install-btn').onclick = async () => {
+                    if (!deferredPrompt) return;
+                    banner.remove();
+                    deferredPrompt.prompt();
+                    try { await deferredPrompt.userChoice; } catch { }
+                    deferredPrompt = null;
+                };
+            };
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                showBanner();
+            });
+
+            window.addEventListener('appinstalled', () => {
+                deferredPrompt = null;
+                const b = document.getElementById('pwa-install-banner');
+                if (b) b.remove();
+            });
+        })();
+    </script>
+</body>
+</html>
