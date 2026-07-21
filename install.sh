@@ -397,14 +397,14 @@ install_mediamtx() {
     if [ -f "mediamtx" ] && [ -x "mediamtx" ]; then
         log_ok "MediaMTX binary already exists"
         return 0
-    fi
+    #fi
 
-    local MEDIAMTX_VERSION="1.16.2"
-    local MEDIAMTX_FILE="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
+    #local MEDIAMTX_VERSION="1.16.2"
+    #local MEDIAMTX_FILE="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
     #local MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases/download/v${MEDIAMTX_VERSION}/${MEDIAMTX_FILE}"
-    local MEDIAMTX_URL=https://github.com/bluenviron/mediamtx/releases/download//v1.16.2/mediamtx_v1.16.2_linux_arm64.tar.gz
+    #local MEDIAMTX_URL=https://github.com/bluenviron/mediamtx/releases/download//v1.16.2/mediamtx_v1.16.2_linux_arm64.tar.gz
 
-    log_info "Downloading MediaMTX v${MEDIAMTX_VERSION} for ${ARCH_LABEL}..."
+    #log_info "Downloading MediaMTX v${MEDIAMTX_VERSION} for ${ARCH_LABEL}..."
     
     if command -v wget &>/dev/null; then
         wget -q --show-progress -O mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
