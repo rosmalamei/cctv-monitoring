@@ -406,21 +406,21 @@ install_mediamtx() {
 
     #log_info "Downloading MediaMTX v${MEDIAMTX_VERSION} for ${ARCH_LABEL}..."
     
-    if command -v wget &>/dev/null; then
-        wget -q --show-progress -O mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
-            log_error "Failed to download MediaMTX"
-            log_info "Try downloading manually from: $MEDIAMTX_URL"
-            exit 1
-        }
-    elif command -v curl &>/dev/null; then
-        curl -L --progress-bar -o mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
-            log_error "Failed to download MediaMTX"
-            log_info "Try downloading manually from: $MEDIAMTX_URL"
-            exit 1
-        }
-    else
-        log_error "Neither curl nor wget found"
-        exit 1
+    #if command -v wget &>/dev/null; then
+    #    wget -q --show-progress -O mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
+    #        log_error "Failed to download MediaMTX"
+    #        log_info "Try downloading manually from: $MEDIAMTX_URL"
+    #        exit 1
+    #    }
+    #elif command -v curl &>/dev/null; then
+    #    curl -L --progress-bar -o mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
+    #        log_error "Failed to download MediaMTX"
+    #        log_info "Try downloading manually from: $MEDIAMTX_URL"
+    #        exit 1
+    #    }
+    #else
+    #    log_error "Neither curl nor wget found"
+    #    exit 1
     fi
 
     tar -xzf mediamtx.tar.gz mediamtx mediamtx.yml 2>/dev/null || {
