@@ -393,10 +393,10 @@ install_nodejs() {
 # ──────────────────────────────────────────────────────────────
 # Install MediaMTX
 # ──────────────────────────────────────────────────────────────
-install_mediamtx() {
-    if [ -f "mediamtx" ] && [ -x "mediamtx" ]; then
-        log_ok "MediaMTX binary already exists"
-        return 0
+#install_mediamtx() {
+#    if [ -f "mediamtx" ] && [ -x "mediamtx" ]; then
+#        log_ok "MediaMTX binary already exists"
+#        return 0
 #    fi
 
 #    local MEDIAMTX_VERSION="1.16.2"
