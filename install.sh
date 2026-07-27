@@ -359,7 +359,7 @@ install_nodejs() {
 
     case "$PKG_MANAGER" in
         apt)
-            curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO -E bash - 2>&1 | tail -3 >> "$INSTALL_LOG"
+            curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash - 2>&1 | tail -3 >> "$INSTALL_LOG"
             $SUDO apt-get install -y nodejs 2>&1 | tail -3 >> "$INSTALL_LOG"
             ;;
         dnf|yum)
