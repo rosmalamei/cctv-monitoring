@@ -399,36 +399,36 @@ install_mediamtx() {
         return 0
     fi
 
-    local MEDIAMTX_VERSION="1.17.1"
-    local MEDIAMTX_FILE="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
-    local MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases/download/v${MEDIAMTX_VERSION}/${MEDIAMTX_FILE}"
+#    local MEDIAMTX_VERSION="1.16.1"
+#    local MEDIAMTX_FILE="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
+#    local MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases/download/v${MEDIAMTX_VERSION}/${MEDIAMTX_FILE}"
 
-    log_info "Downloading MediaMTX v${MEDIAMTX_VERSION} for ${ARCH_LABEL}..."
+#    log_info "Downloading MediaMTX v${MEDIAMTX_VERSION} for ${ARCH_LABEL}..."
     
-    if command -v wget &>/dev/null; then
-        wget -q --show-progress -O mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
-            log_error "Failed to download MediaMTX"
-            log_info "Try downloading manually from: $MEDIAMTX_URL"
-            exit 1
-        }
-    elif command -v curl &>/dev/null; then
-        curl -L --progress-bar -o mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
-            log_error "Failed to download MediaMTX"
-            log_info "Try downloading manually from: $MEDIAMTX_URL"
-            exit 1
-        }
-    else
-        log_error "Neither curl nor wget found"
-        exit 1
-    fi
-
-    tar -xzf mediamtx.tar.gz mediamtx mediamtx.yml 2>/dev/null || {
-        tar -xzf mediamtx.tar.gz 2>/dev/null || {
-            log_error "Failed to extract MediaMTX archive"
-            exit 1
-        }
-    }
-    rm -f mediamtx.tar.gz
+#    if command -v wget &>/dev/null; then
+#        wget -q --show-progress -O mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
+#            log_error "Failed to download MediaMTX"
+#            log_info "Try downloading manually from: $MEDIAMTX_URL"
+#            exit 1
+#        }
+#    elif command -v curl &>/dev/null; then
+#        curl -L --progress-bar -o mediamtx.tar.gz "$MEDIAMTX_URL" 2>&1 || {
+#            log_error "Failed to download MediaMTX"
+#           log_info "Try downloading manually from: $MEDIAMTX_URL"
+#            exit 1
+#        }
+#    else
+#        log_error "Neither curl nor wget found"
+#        exit 1
+#    fi
+#
+#    tar -xzf mediamtx.tar.gz mediamtx mediamtx.yml 2>/dev/null || {
+#        tar -xzf mediamtx.tar.gz 2>/dev/null || {
+#            log_error "Failed to extract MediaMTX archive"
+#            exit 1
+#        }
+#    }
+#    rm -f mediamtx.tar.gz
     chmod +x mediamtx
 
     if [ -f "mediamtx" ]; then
