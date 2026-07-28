@@ -429,7 +429,7 @@ install_mediamtx() {
 #        }
 #    }
 #    rm -f mediamtx.tar.gz
-    cp /root/mediamtx /root/cctv-monitoring/
+#    cp /root/mediamtx /root/cctv-monitoring/
     chmod +x mediamtx
 
     if [ -f "mediamtx" ]; then
