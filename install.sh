@@ -363,7 +363,7 @@ install_nodejs() {
             $SUDO apt-get install -y nodejs 2>&1 | tail -3 >> "$INSTALL_LOG"
             ;;
         dnf|yum)
-            curl -fsSL https://rpm.nodesource.com/setup_20.x | $SUDO -E bash - 2>&1 | tail -3 >> "$INSTALL_LOG"
+            curl -fsSL https://rpm.nodesource.com/setup_22.x | $SUDO -E bash - 2>&1 | tail -3 >> "$INSTALL_LOG"
             $SUDO $PKG_INSTALL nodejs 2>&1 | tail -3 >> "$INSTALL_LOG"
             ;;
         pacman)
