@@ -54,9 +54,9 @@ log_separator() { echo -e "  ${MAGENTA}─────────────�
 banner() {
     echo
     echo -e "  ${BOLD}${CYAN}╔════════════════════════════════════════════════════╗${NC}"
-    echo -e "  ${BOLD}${CYAN}║       CCTV MONITORING SYSTEM INSTALLER            ║${NC}"
-    echo -e "  ${BOLD}${CYAN}║                ALIJAYA-NET                        ║${NC}"
-    echo -e "  ${BOLD}${CYAN}║               Version ${SCRIPT_VERSION}                   ║${NC}"
+    echo -e "  ${BOLD}${CYAN}║        CCTV MONITORING SYSTEM INSTALLER            ║${NC}"
+    echo -e "  ${BOLD}${CYAN}║                 ALIJAYA-NET                        ║${NC}"
+    echo -e "  ${BOLD}${CYAN}║                 Version ${SCRIPT_VERSION}                     ║${NC}"
     echo -e "  ${BOLD}${CYAN}╚════════════════════════════════════════════════════╝${NC}"
     echo
     echo -e "  ${BOLD}Repository:${NC} https://github.com/alijayanet/cctv-monitoring"
